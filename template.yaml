@@ -1,67 +1,145 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: DocumentGPT Serverless Application
+Description: DocumentGPT API
 
 Globals:
   Function:
-    Timeout: 30
     Runtime: python3.9
+    Timeout: 30
     Environment:
       Variables:
-        COGNITO_USER_POOL_ID: us-east-1_LXGQNHCaw
-        S3_BUCKET: documentgpt-uploads-1757887191
-        AWS_REGION: us-east-1
+        DYNAMODB_TABLE: documents
+        S3_BUCKET: documentgpt-uploads
 
 Resources:
-  DocumentProcessorFunction:
-    Type: AWS::Serverless::Function
+  # API Gateway
+  DocumentGPTApi:
+    Type: AWS::Serverless::Api
     Properties:
-      CodeUri: src/
-      Handler: handlers.document_processor.lambda_handler
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            Path: /process
-            Method: post
-            Cors:
-              AllowMethods: "'POST,OPTIONS'"
-              AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              AllowOrigin: "'*'"
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
 
-  ChatbotFunction:
+  # Lambda Functions
+  AgentsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/
-      Handler: handlers.chatbot.lambda_handler
+      CodeUri: src/handlers/
+      Handler: agents_handler.lambda_handler
       Events:
         Api:
           Type: Api
           Properties:
-            Path: /chat
-            Method: post
-            Cors:
-              AllowMethods: "'POST,OPTIONS'"
-              AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              AllowOrigin: "'*'"
+            RestApiId: !Ref DocumentGPTApi
+            Path: /api/agents
+            Method: get
 
-  AuthFunction:
+  PdfSearchFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/
-      Handler: handlers.auth.lambda_handler
+      CodeUri: src/handlers/
+      Handler: pdf_search_handler.lambda_handler
       Events:
         Api:
           Type: Api
           Properties:
-            Path: /auth
+            RestApiId: !Ref DocumentGPTApi
+            Path: /api/pdf/search
             Method: post
-            Cors:
-              AllowMethods: "'POST,OPTIONS'"
-              AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              AllowOrigin: "'*'"
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/handlers/
+      Handler: health_handler.lambda_handler
+      Events:
+        ApiHealth:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocumentGPTApi
+            Path: /api/health
+            Method: get
+        ApiV5Health:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocumentGPTApi
+            Path: /api/v5/health
+            Method: get
+
+  MultiAgentDebateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/handlers/
+      Handler: multi_agent_debate_handler.lambda_handler
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocumentGPTApi
+            Path: /api/v5/multi-agent-debate
+            Method: post
+
+  DocumentsV5Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/handlers/
+      Handler: documents_handler.lambda_handler
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocumentGPTApi
+            Path: /api/v5/documents
+            Method: get
+
+  ChatV5Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/handlers/
+      Handler: simple_rag_handler.lambda_handler
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocumentGPTApi
+            Path: /api/v5/chat
+            Method: post
+
+  # DynamoDB Table
+  DocumentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: documents
+      AttributeDefinitions:
+        - AttributeName: docId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: docId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+
+  # S3 Bucket
+  DocumentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: documentgpt-uploads
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # SNS Topic
+  DocumentProcessingTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: document-processing-notifications
 
 Outputs:
-  ApiGatewayUrl:
-    Description: "API Gateway endpoint URL"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${DocumentGPTApi}.execute-api.${AWS::Region}.amazonaws.com/prod"

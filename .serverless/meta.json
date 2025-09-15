@@ -1,0 +1,114 @@
+{
+  "/Users/muhammadadeyemi/documentgpt.io/SaaS-documentGPT/template.yaml": {
+    "versionFramework": "4.18.2",
+    "servicePath": "/Users/muhammadadeyemi/documentgpt.io/SaaS-documentGPT/template.yaml",
+    "serviceConfigFileName": "template.yaml",
+    "service": {
+      "AWSTemplateFormatVersion": "2010-09-09",
+      "Transform": "AWS::Serverless-2016-10-31",
+      "Description": "DocumentGPT Serverless Application",
+      "Globals": {
+        "Function": {
+          "Timeout": 30,
+          "Runtime": "python3.9",
+          "Environment": {
+            "Variables": {
+              "COGNITO_USER_POOL_ID": "us-east-1_LXGQNHCaw",
+              "S3_BUCKET": "documentgpt-uploads-1757887191",
+              "AWS_REGION": "us-east-1"
+            }
+          }
+        }
+      },
+      "Resources": {
+        "DocumentProcessorFunction": {
+          "Type": "AWS::Serverless::Function",
+          "Properties": {
+            "CodeUri": "src/",
+            "Handler": "handlers.document_processor.lambda_handler",
+            "Events": {
+              "Api": {
+                "Type": "Api",
+                "Properties": {
+                  "Path": "/process",
+                  "Method": "post",
+                  "Cors": {
+                    "AllowMethods": "'POST,OPTIONS'",
+                    "AllowHeaders": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                    "AllowOrigin": "'*'"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ChatbotFunction": {
+          "Type": "AWS::Serverless::Function",
+          "Properties": {
+            "CodeUri": "src/",
+            "Handler": "handlers.chatbot.lambda_handler",
+            "Events": {
+              "Api": {
+                "Type": "Api",
+                "Properties": {
+                  "Path": "/chat",
+                  "Method": "post",
+                  "Cors": {
+                    "AllowMethods": "'POST,OPTIONS'",
+                    "AllowHeaders": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                    "AllowOrigin": "'*'"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "AuthFunction": {
+          "Type": "AWS::Serverless::Function",
+          "Properties": {
+            "CodeUri": "src/",
+            "Handler": "handlers.auth.lambda_handler",
+            "Events": {
+              "Api": {
+                "Type": "Api",
+                "Properties": {
+                  "Path": "/auth",
+                  "Method": "post",
+                  "Cors": {
+                    "AllowMethods": "'POST,OPTIONS'",
+                    "AllowHeaders": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                    "AllowOrigin": "'*'"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Outputs": {
+        "ApiGatewayUrl": {
+          "Description": "API Gateway endpoint URL",
+          "Value": {
+            "Fn::Sub": "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+          }
+        }
+      }
+    },
+    "error": {
+      "message": "You must sign in or use a license key with Serverless Framework V.4 and later versions. Please use \"serverless login\".",
+      "stack": "Error: You must sign in or use a license key with Serverless Framework V.4 and later versions. Please use \"serverless login\".\n    at Authentication.getAuthenticatedData (file:///Users/muhammadadeyemi/.serverless/releases/4.18.2/package/dist/sf-core.js:806:10899)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Authentication.authenticate (file:///Users/muhammadadeyemi/.serverless/releases/4.18.2/package/dist/sf-core.js:808:22245)\n    at async CfnRunner.resolveVariablesAndAuthenticate (file:///Users/muhammadadeyemi/.serverless/releases/4.18.2/package/dist/sf-core.js:812:2379)\n    at async CfnRunner.run (file:///Users/muhammadadeyemi/.serverless/releases/4.18.2/package/dist/sf-core.js:1129:3015)\n    at async route (file:///Users/muhammadadeyemi/.serverless/releases/4.18.2/package/dist/sf-core.js:1603:2878)\n    at async Object.run (file:///Users/muhammadadeyemi/.serverless/releases/4.18.2/package/dist/sf-core.js:1604:3661)\n    at async run2 (file:///Users/muhammadadeyemi/.serverless/releases/4.18.2/package/dist/sf-core.js:1604:4815)"
+    },
+    "serviceRawFile": "AWSTemplateFormatVersion: '2010-09-09'\nTransform: AWS::Serverless-2016-10-31\nDescription: DocumentGPT Serverless Application\n\nGlobals:\n  Function:\n    Timeout: 30\n    Runtime: python3.9\n    Environment:\n      Variables:\n        COGNITO_USER_POOL_ID: us-east-1_LXGQNHCaw\n        S3_BUCKET: documentgpt-uploads-1757887191\n        AWS_REGION: us-east-1\n\nResources:\n  DocumentProcessorFunction:\n    Type: AWS::Serverless::Function\n    Properties:\n      CodeUri: src/\n      Handler: handlers.document_processor.lambda_handler\n      Events:\n        Api:\n          Type: Api\n          Properties:\n            Path: /process\n            Method: post\n            Cors:\n              AllowMethods: \"'POST,OPTIONS'\"\n              AllowHeaders: \"'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'\"\n              AllowOrigin: \"'*'\"\n\n  ChatbotFunction:\n    Type: AWS::Serverless::Function\n    Properties:\n      CodeUri: src/\n      Handler: handlers.chatbot.lambda_handler\n      Events:\n        Api:\n          Type: Api\n          Properties:\n            Path: /chat\n            Method: post\n            Cors:\n              AllowMethods: \"'POST,OPTIONS'\"\n              AllowHeaders: \"'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'\"\n              AllowOrigin: \"'*'\"\n\n  AuthFunction:\n    Type: AWS::Serverless::Function\n    Properties:\n      CodeUri: src/\n      Handler: handlers.auth.lambda_handler\n      Events:\n        Api:\n          Type: Api\n          Properties:\n            Path: /auth\n            Method: post\n            Cors:\n              AllowMethods: \"'POST,OPTIONS'\"\n              AllowHeaders: \"'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'\"\n              AllowOrigin: \"'*'\"\n\nOutputs:\n  ApiGatewayUrl:\n    Description: \"API Gateway endpoint URL\"\n    Value: !Sub \"https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/\"",
+    "command": [
+      "deploy"
+    ],
+    "options": {
+      "stage": "prod"
+    },
+    "serviceProviderAwsCfStackId": null,
+    "serviceProviderAwsCfStackCreated": null,
+    "serviceProviderAwsCfStackUpdated": null,
+    "serviceProviderAwsCfStackStatus": null,
+    "serviceProviderAwsCfStackOutputs": null
+  }
+}

@@ -1,0 +1,120 @@
+service: documentgpt-api
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: us-east-1
+  stage: prod
+  environment:
+    DYNAMODB_TABLE: documents
+    S3_BUCKET: documentgpt-uploads
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:PutObject
+      Resource: "arn:aws:s3:::${self:provider.environment.S3_BUCKET}/*"
+
+functions:
+  agents:
+    handler: src/handlers/agents_handler.lambda_handler
+    events:
+      - http:
+          path: api/agents
+          method: get
+          cors: true
+
+  pdfSearch:
+    handler: src/handlers/pdf_search_handler.lambda_handler
+    events:
+      - http:
+          path: api/pdf/search
+          method: post
+          cors: true
+
+  health:
+    handler: src/handlers/health_handler.lambda_handler
+    events:
+      - http:
+          path: api/health
+          method: get
+          cors: true
+
+  v5Health:
+    handler: src/handlers/health_handler.lambda_handler
+    events:
+      - http:
+          path: api/v5/health
+          method: get
+          cors: true
+
+  multiAgentDebate:
+    handler: src/handlers/multi_agent_debate_handler.lambda_handler
+    events:
+      - http:
+          path: api/v5/multi-agent-debate
+          method: post
+          cors: true
+
+  documentsV5:
+    handler: src/handlers/documents_handler.lambda_handler
+    events:
+      - http:
+          path: api/v5/documents
+          method: get
+          cors: true
+
+  chatV5:
+    handler: src/handlers/simple_rag_handler.lambda_handler
+    events:
+      - http:
+          path: api/v5/chat
+          method: post
+          cors: true
+
+resources:
+  Resources:
+    DocumentsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        AttributeDefinitions:
+          - AttributeName: docId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: docId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        SSESpecification:
+          SSEEnabled: true
+
+    DocumentsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.S3_BUCKET}
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+
+    DocumentProcessingTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: document-processing-notifications
+
+plugins:
+  - serverless-python-requirements

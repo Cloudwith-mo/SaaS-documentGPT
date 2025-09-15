@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocumentsGPT v5</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        .gradient-text { background: linear-gradient(to right, #10b981, #14b8a6, #0ea5e9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .gradient-btn { background: linear-gradient(to right, #10b981, #0ea5e9); }
+        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
+        .highlight-box { background: rgba(16, 185, 129, 0.25); border: 2px solid rgba(16, 185, 129, 0.6); }
+    </style>
+</head>
+<body class="bg-[#f7fafc] text-slate-800 h-screen overflow-hidden">
+    <!-- Top Bar -->
+    <div class="h-14 px-4 flex items-center justify-between border-b border-slate-200/80 glass-panel">
+        <div class="flex items-center gap-3">
+            <i data-lucide="sparkles" class="h-5 w-5 text-emerald-500"></i>
+            <span class="text-lg font-semibold gradient-text">DocumentsGPT</span>
+            <span class="ml-2 px-2 py-1 text-xs border border-slate-200 rounded">v5</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="modelBtn" class="px-3 py-1 border border-slate-200 rounded text-sm">Model: GPT-5</button>
+            <button id="debateBtn" class="px-3 py-1 border border-slate-200 rounded text-sm flex items-center gap-1">
+                <i data-lucide="users" class="h-4 w-4"></i>Multi-Agent Debate
+            </button>
+            <button id="agentsBtn" class="px-3 py-1 border border-slate-200 rounded text-sm">Manage Agents</button>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="h-[calc(100vh-56px)] grid grid-cols-[280px_1fr_560px] gap-3 p-3">
+        <!-- Sidebar -->
+        <aside class="rounded-2xl glass-panel border border-slate-200 flex flex-col">
+            <div class="p-3">
+                <button class="w-full gradient-btn text-white rounded-lg px-3 py-2 flex items-center gap-2">
+                    <i data-lucide="file-plus-2" class="h-4 w-4"></i>New Chat / Load Sample
+                </button>
+            </div>
+            <div class="px-4 text-xs uppercase tracking-wide text-slate-500 mb-2">Agent Presets</div>
+            <div class="p-3 space-y-2">
+                <button class="preset-btn w-full text-left rounded-xl border border-slate-200/80 glass-panel px-3 py-2 hover:bg-white text-sm" data-preset="legal_finance_compliance">Legal/Finance/Compliance</button>
+                <button class="preset-btn w-full text-left rounded-xl border border-slate-200/80 glass-panel px-3 py-2 hover:bg-white text-sm" data-preset="tech_design_pm">Tech/Design/PM</button>
+            </div>
+            <div class="px-4 text-xs uppercase tracking-wide text-slate-500 mb-2">Recent</div>
+            <div class="p-3 space-y-2 flex-1">
+                <button class="w-full text-left rounded-xl border border-slate-200/80 glass-panel px-3 py-2 hover:bg-white">
+                    <div class="text-sm">AI assistant</div>
+                    <div class="text-xs text-slate-500">updated 2h ago</div>
+                </button>
+                <button class="w-full text-left rounded-xl border border-slate-200/80 glass-panel px-3 py-2 hover:bg-white">
+                    <div class="text-sm">Q3 review</div>
+                    <div class="text-xs text-slate-500">updated 4h ago</div>
+                </button>
+            </div>
+            <div class="p-3 border-t border-slate-200/80 flex items-center justify-between">
+                <button class="text-xs text-slate-500">Settings</button>
+                <button class="text-xs gradient-text">Upgrade to Pro</button>
+            </div>
+        </aside>
+
+        <!-- PDF Panel -->
+        <section class="rounded-2xl glass-panel border border-slate-200 overflow-hidden">
+            <div class="h-12 px-4 flex items-center justify-between border-b border-slate-200/80 bg-white/70">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="file-text" class="h-4 w-4"></i>
+                    <span class="font-medium" id="docName">Sample.pdf</span>
+                    <span class="text-slate-500" id="docPages">• 3p</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="relative">
+                        <i data-lucide="search" class="absolute left-2 top-2.5 h-4 w-4 text-slate-400"></i>
+                        <input id="searchInput" class="pl-8 pr-3 py-2 bg-white/70 border border-slate-200 rounded text-slate-800 placeholder:text-slate-400" placeholder="Search in PDF">
+                    </div>
+                    <button id="searchBtn" class="px-3 py-2 border border-slate-200 rounded text-sm">Find</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-[180px_1fr] h-[calc(100vh-56px-48px-24px)]">
+                <div class="border-r border-slate-200/80 bg-white/60 p-2 space-y-2 overflow-y-auto">
+                    <div id="pageNav"></div>
+                </div>
+                <div class="p-4 flex items-center justify-center bg-white/60">
+                    <div id="pdfViewer" class="relative w-full h-full bg-white border border-slate-200 rounded-lg flex items-center justify-center overflow-hidden">
+                        <div class="text-sm text-slate-500">PDF Page Preview</div>
+                        <div id="highlights"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chat Panel -->
+        <section class="rounded-2xl glass-panel border border-slate-200 flex flex-col overflow-hidden">
+            <div class="h-12 px-4 flex items-center justify-between border-b border-slate-200/80 bg-white/70">
+                <button id="agentDocsBtn" class="flex items-center gap-2 border border-slate-200 rounded px-3 py-1">
+                    <i data-lucide="bot" class="h-4 w-4"></i>Agent & Docs
+                    <i data-lucide="chevron-down" class="h-4 w-4"></i>
+                </button>
+                <button class="border border-slate-200 rounded px-3 py-1 text-sm" id="modelBtn2">Model: GPT-5</button>
+            </div>
+            <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-white/60"></div>
+            <div class="border-t border-slate-200/80 p-3 bg-white/70">
+                <div class="rounded-2xl bg-white/80 border border-slate-200 p-2">
+                    <div class="px-2 py-1 flex gap-2 flex-wrap">
+                        <span class="suggestion-chip rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 bg-white cursor-pointer">Summarize</span>
+                        <span class="suggestion-chip rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 bg-white cursor-pointer">List key risks</span>
+                        <span class="suggestion-chip rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 bg-white cursor-pointer">Find clauses</span>
+                        <span class="suggestion-chip rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 bg-white cursor-pointer">Draft email</span>
+                    </div>
+                    <div class="flex items-end gap-2 p-2">
+                        <button class="rounded-full border border-slate-200 p-2">
+                            <i data-lucide="paperclip" class="h-4 w-4"></i>
+                        </button>
+                        <textarea id="messageInput" placeholder="Ask anything about your documents…" class="flex-1 min-h-[44px] max-h-40 resize-y bg-transparent text-slate-800 placeholder:text-slate-400 border-0 outline-none"></textarea>
+                        <button id="sendBtn" class="rounded-full gradient-btn text-white p-2">
+                            <i data-lucide="send" class="h-4 w-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="consensusBar" class="hidden border-t border-slate-200/80 bg-white/90 px-4 py-2 text-sm flex items-center gap-2">
+                <span class="px-2 py-1 bg-slate-100 border border-slate-200 rounded text-xs">Consensus</span>
+                <span class="truncate" id="consensusText">Consensus pending...</span>
+                <div class="ml-auto flex gap-2">
+                    <button class="text-sm px-2 py-1">View Debate</button>
+                    <button class="text-sm px-2 py-1 gradient-btn text-white rounded">Export</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Debate Panel Overlay -->
+    <div id="debatePanel" class="hidden fixed inset-0 z-40 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/20" onclick="closeDebate()"></div>
+        <div class="relative z-10 w-[min(1200px,95vw)] max-h-[85vh] grid grid-cols-1 md:grid-cols-3 gap-3 p-3">
+            <div class="rounded-2xl bg-white/95 border border-slate-200 p-4">
+                <h3 class="text-base font-semibold mb-3">Legal Agent</h3>
+                <div id="legalArgs" class="space-y-2 text-sm">
+                    <div class="rounded-xl border border-slate-200 p-2 bg-white/90 text-slate-500">Waiting…</div>
+                </div>
+            </div>
+            <div class="rounded-2xl bg-white/95 border border-slate-200 p-4">
+                <h3 class="text-base font-semibold mb-3">Finance Agent</h3>
+                <div id="financeArgs" class="space-y-2 text-sm">
+                    <div class="rounded-xl border border-slate-200 p-2 bg-white/90 text-slate-500">Waiting…</div>
+                </div>
+            </div>
+            <div class="rounded-2xl bg-white/95 border border-slate-200 p-4">
+                <h3 class="text-base font-semibold mb-3">Compliance Agent</h3>
+                <div id="complianceArgs" class="space-y-2 text-sm">
+                    <div class="rounded-xl border border-slate-200 p-2 bg-white/90 text-slate-500">Waiting…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Model Modal -->
+    <div id="modelModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+        <div class="bg-white rounded-xl shadow-lg p-6 w-96">
+            <h2 class="text-lg font-semibold mb-4">Select Model</h2>
+            <div class="space-y-2">
+                <button class="model-option w-full text-left px-3 py-2 border border-slate-200 rounded hover:bg-slate-50" data-model="gpt-5">GPT-5 (Quality)</button>
+                <button class="model-option w-full text-left px-3 py-2 border border-slate-200 rounded hover:bg-slate-50" data-model="gpt-5-turbo">GPT-5-Turbo (Fast)</button>
+                <button class="model-option w-full text-left px-3 py-2 border border-slate-200 rounded hover:bg-slate-50" data-model="gpt-4.1-mini">GPT-4.1-mini (Economy)</button>
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button onclick="closeModelModal()" class="px-4 py-2 bg-slate-100 rounded">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // State
+        let currentModel = 'gpt-5';
+        let debateActive = false;
+        let eventSource = null;
+        let currentPage = 1;
+        let selectedDocs = ['sample', 'd1'];
+
+        // Initialize page navigation
+        function initPageNav() {
+            const nav = document.getElementById('pageNav');
+            nav.innerHTML = '';
+            for (let i = 1; i <= 3; i++) {
+                const btn = document.createElement('button');
+                btn.className = `w-full aspect-[3/4] rounded-lg border border-slate-200 bg-white text-xs flex items-center justify-center hover:bg-slate-50 ${i === currentPage ? 'ring-2 ring-sky-300' : ''}`;
+                btn.textContent = `p.${i}`;
+                btn.onclick = () => setPage(i);
+                nav.appendChild(btn);
+            }
+        }
+
+        function setPage(page) {
+            currentPage = page;
+            initPageNav();
+        }
+
+        // Chat functionality
+        function addMessage(role, text, citations = []) {
+            const chat = document.getElementById('chatMessages');
+            const msg = document.createElement('div');
+            msg.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            
+            const bubble = document.createElement('div');
+            bubble.className = `max-w-[80%] rounded-xl px-4 py-3 ${role === 'user' ? 'gradient-btn text-white' : 'bg-slate-100 text-slate-800'}`;
+            bubble.innerHTML = `
+                <p class="text-sm">${text}</p>
+                ${citations.length > 0 ? `
+                    <div class="mt-2 pt-2 border-t border-slate-200">
+                        <p class="text-xs text-slate-600 mb-1">Sources:</p>
+                        ${citations.map(c => `<div class="text-xs text-slate-500 cursor-pointer" onclick="viewCitation('${c.docId}', ${c.page})">📄 ${c.docId} (Page ${c.page})</div>`).join('')}
+                    </div>
+                ` : ''}
+                <p class="text-xs opacity-70 mt-1">${new Date().toLocaleTimeString()}</p>
+            `;
+            msg.appendChild(bubble);
+            chat.appendChild(msg);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function viewCitation(docId, page) {
+            setPage(page);
+            showHighlight();
+        }
+
+        function showHighlight() {
+            const highlights = document.getElementById('highlights');
+            highlights.innerHTML = '<div class="absolute highlight-box rounded-lg" style="left: 200px; top: 300px; width: 300px; height: 60px;"></div>';
+            setTimeout(() => highlights.innerHTML = '', 2200);
+        }
+
+        // Send message
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            addMessage('user', message);
+            input.value = '';
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        message,
+                        selectedDocs,
+                        model: currentModel
+                    })
+                });
+                const data = await response.json();
+                addMessage('assistant', data.text, data.citations || []);
+            } catch (error) {
+                addMessage('assistant', 'Sorry, there was an error processing your request.');
+            }
+        }
+
+        // Debate functionality
+        function toggleDebate() {
+            debateActive = !debateActive;
+            const panel = document.getElementById('debatePanel');
+            const consensusBar = document.getElementById('consensusBar');
+            
+            if (debateActive) {
+                panel.classList.remove('hidden');
+                consensusBar.classList.remove('hidden');
+                startDebateStream();
+            } else {
+                panel.classList.add('hidden');
+                consensusBar.classList.add('hidden');
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
+            }
+        }
+
+        function closeDebate() {
+            debateActive = false;
+            document.getElementById('debatePanel').classList.add('hidden');
+            document.getElementById('consensusBar').classList.add('hidden');
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+        }
+
+        function startDebateStream() {
+            if (eventSource) eventSource.close();
+            
+            eventSource = new EventSource('/api/debate/stream');
+            
+            eventSource.addEventListener('debate.argument', (e) => {
+                const data = JSON.parse(e.data);
+                const container = document.getElementById(`${data.agent.toLowerCase()}Args`);
+                if (container.children[0]?.textContent === 'Waiting…') {
+                    container.innerHTML = '';
+                }
+                const arg = document.createElement('div');
+                arg.className = 'rounded-xl border border-slate-200 p-2 bg-white';
+                arg.textContent = data.text;
+                container.appendChild(arg);
+            });
+
+            eventSource.addEventListener('debate.consensus', (e) => {
+                const data = JSON.parse(e.data);
+                document.getElementById('consensusText').textContent = data.text;
+            });
+        }
+
+        // Model selection
+        function openModelModal() {
+            document.getElementById('modelModal').classList.remove('hidden');
+        }
+
+        function closeModelModal() {
+            document.getElementById('modelModal').classList.add('hidden');
+        }
+
+        function selectModel(model) {
+            currentModel = model;
+            document.getElementById('modelBtn').textContent = `Model: ${model.toUpperCase()}`;
+            document.getElementById('modelBtn2').textContent = `Model: ${model.toUpperCase()}`;
+            closeModelModal();
+        }
+
+        // Search
+        async function searchPDF() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) return;
+
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query, docId: 'sample'})
+                });
+                const data = await response.json();
+                if (data.results.length > 0) {
+                    showHighlight();
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('sendBtn').onclick = sendMessage;
+        document.getElementById('messageInput').onkeypress = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        };
+        document.getElementById('debateBtn').onclick = toggleDebate;
+        document.getElementById('modelBtn').onclick = openModelModal;
+        document.getElementById('modelBtn2').onclick = openModelModal;
+        document.getElementById('searchBtn').onclick = searchPDF;
+        document.getElementById('searchInput').onkeypress = (e) => {
+            if (e.key === 'Enter') searchPDF();
+        };
+
+        document.querySelectorAll('.model-option').forEach(btn => {
+            btn.onclick = () => selectModel(btn.dataset.model);
+        });
+
+        document.querySelectorAll('.suggestion-chip').forEach(chip => {
+            chip.onclick = () => {
+                document.getElementById('messageInput').value = chip.textContent;
+                sendMessage();
+            };
+        });
+
+        // Initialize
+        initPageNav();
+        addMessage('assistant', 'Welcome to v5. Toggle Multi-Agent Debate for parallel viewpoints and a consensus summary.');
+    </script>
+</body>
+</html>

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParsePilot - High-Accuracy Document Processing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .upload-area { 
+            border: 2px dashed #3498db; border-radius: 12px; padding: 40px; text-align: center; 
+            background: white; margin-bottom: 30px; cursor: pointer; transition: all 0.3s;
+        }
+        .upload-area:hover { border-color: #2980b9; background: #f8f9fa; }
+        .upload-area.dragover { border-color: #27ae60; background: #e8f5e8; }
+        .btn { 
+            background: #3498db; color: white; border: none; padding: 12px 24px; 
+            border-radius: 6px; cursor: pointer; font-size: 16px; transition: all 0.3s;
+        }
+        .btn:hover { background: #2980b9; }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .document-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; }
+        .document-card { 
+            background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s; border-left: 4px solid #3498db; cursor: pointer;
+        }
+        .document-card:hover { transform: translateY(-2px); }
+        .document-card.needs-review { border-left: 4px solid #f59e0b; }
+        .document-card.processing { opacity: 0.6; }
+        .document-card.error { border-left-color: #e74c3c; }
+        
+        .doc-header { 
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; 
+        }
+        .doc-type { 
+            display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; 
+            font-weight: bold; text-transform: uppercase; background: #3498db; color: white;
+        }
+        .review-badge { 
+            background: #f59e0b; color: white; padding: 2px 8px; border-radius: 12px; 
+            font-size: 10px; font-weight: 600;
+        }
+        .sources { font-size: 10px; color: #6b7280; margin-top: 2px; }
+        .review-banner { 
+            background: #fef3c7; border: 1px solid #f59e0b; padding: 8px; margin: 8px 0; 
+            border-radius: 4px; font-size: 12px; color: #92400e;
+        }
+        
+        .confidence-badge { 
+            padding: 2px 6px; border-radius: 12px; font-size: 10px; font-weight: 600; margin-left: 8px;
+        }
+        .confidence-badge.high { background: #dcfce7; color: #166534; }
+        .confidence-badge.medium { background: #fef3c7; color: #92400e; }
+        .confidence-badge.low { background: #fee2e2; color: #991b1b; }
+        
+        .source-badge { 
+            font-size: 9px; padding: 1px 4px; border-radius: 3px; 
+            background: #f3f4f6; color: #6b7280; margin-left: 4px;
+        }
+        
+        .field-item { 
+            display: flex; justify-content: space-between; align-items: center; padding: 8px 0; 
+            border-bottom: 1px solid #ecf0f1; font-size: 14px;
+        }
+        .field-item.low-confidence { background: #fef2f2; border-left: 3px solid #ef4444; padding-left: 8px; }
+        .field-label { font-weight: 600; color: #2c3e50; flex: 1; }
+        .field-value { color: #34495e; text-align: right; max-width: 40%; word-break: break-word; }
+        
+        .extracted-fields { margin-top: 15px; }
+        .summary { 
+            background: #f8f9fa; padding: 12px; border-radius: 6px; margin-top: 10px; 
+            font-style: italic; color: #5a6c7d; font-size: 14px;
+        }
+        
+        .search-bar { 
+            width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; 
+            margin-bottom: 20px; font-size: 16px;
+        }
+        .filter-tabs { 
+            display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
+        }
+        .filter-tab { 
+            padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; 
+            background: white; cursor: pointer; transition: all 0.3s;
+        }
+        .filter-tab.active { background: #3498db; color: white; border-color: #3498db; }
+        
+        .stats { 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+            gap: 15px; margin-bottom: 30px;
+        }
+        .stat-card { 
+            background: white; padding: 20px; border-radius: 8px; text-align: center; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .stat-number { font-size: 24px; font-weight: bold; color: #3498db; }
+        .stat-label { font-size: 12px; color: #7f8c8d; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ParsePilot - High-Accuracy Document Processing</h1>
+            <p>Enterprise-grade extraction with per-field confidence and validation</p>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <h3>Drop files here or click to upload</h3>
+            <p>Supports PDF, PNG, JPEG - Any document type</p>
+            <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
+            <button class="btn" onclick="document.getElementById('fileInput').click()">Choose Files</button>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalDocs">0</div>
+                <div class="stat-label">Total Documents</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="processedDocs">0</div>
+                <div class="stat-label">Processed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="avgConfidence">0%</div>
+                <div class="stat-label">Avg Confidence</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="needsReview">0</div>
+                <div class="stat-label">Needs Review</div>
+            </div>
+        </div>
+
+        <input type="text" class="search-bar" id="searchBar" placeholder="Search documents by content, type, or extracted fields...">
+
+        <div class="filter-tabs" id="filterTabs">
+            <div class="filter-tab active" data-filter="all">All Documents</div>
+            <div class="filter-tab" data-filter="Pay Stub">Pay Stubs</div>
+            <div class="filter-tab" data-filter="W-2">W-2 Forms</div>
+            <div class="filter-tab" data-filter="Receipt">Receipts</div>
+            <div class="filter-tab" data-filter="Bank Statement">Bank Statements</div>
+            <div class="filter-tab" data-filter="needs-review">Needs Review</div>
+        </div>
+
+        <div class="document-grid" id="documentGrid">
+            <!-- Documents will be populated here -->
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod';
+        let documents = [];
+        let filteredDocs = [];
+
+        // Sample high-accuracy document data
+        const sampleDocs = [
+            {
+                docId: 'sample-1',
+                filename: 'paystub-jan-2024.pdf',
+                status: 'completed',
+                docType: 'Pay Stub',
+                docTypeConfidence: 0.95,
+                needs_review: false,
+                extraction_sources: ['textract_query', 'pattern'],
+                fields: {
+                    employee_name: { value: 'John Doe', confidence: 0.95, source: 'textract_query', bbox: {Left: 0.1, Top: 0.15, Width: 0.3, Height: 0.03} },
+                    employer_name: { value: 'ACME Corp', confidence: 0.92, source: 'textract_query', bbox: {Left: 0.1, Top: 0.08, Width: 0.25, Height: 0.03} },
+                    pay_period_start: { value: '2024-01-01', confidence: 0.78, source: 'pattern' },
+                    pay_period_end: { value: '2024-01-15', confidence: 0.76, source: 'pattern' },
+                    gross_pay_current: { value: '$2,500.00', confidence: 0.94, source: 'textract_query', bbox: {Left: 0.7, Top: 0.4, Width: 0.15, Height: 0.03} },
+                    net_pay_current: { value: '$1,875.00', confidence: 0.96, source: 'textract_query', bbox: {Left: 0.7, Top: 0.7, Width: 0.15, Height: 0.03} }
+                },
+                summary: 'Pay stub processed with 6 fields extracted using ensemble extraction'
+            },
+            {
+                docId: 'sample-2',
+                filename: 'w2-2023.pdf',
+                status: 'completed',
+                docType: 'W-2',
+                docTypeConfidence: 0.98,
+                needs_review: false,
+                extraction_sources: ['textract_query'],
+                fields: {
+                    employee_name: { value: 'Jane Smith', confidence: 0.97, source: 'textract_query' },
+                    employer_ein: { value: '12-3456789', confidence: 0.95, source: 'textract_query' },
+                    wages: { value: '$65,000.00', confidence: 0.96, source: 'textract_query' },
+                    federal_tax: { value: '$8,500.00', confidence: 0.94, source: 'textract_query' }
+                },
+                summary: 'W-2 form processed with high confidence across all fields'
+            },
+            {
+                docId: 'sample-3',
+                filename: 'receipt-blurry.jpg',
+                status: 'completed',
+                docType: 'Receipt',
+                docTypeConfidence: 0.72,
+                needs_review: true,
+                extraction_sources: ['textract_query', 'tesseract', 'pattern'],
+                fields: {
+                    merchant_name: { value: 'Coffee Shop', confidence: 0.55, source: 'tesseract' },
+                    total_amount: { value: '$4.50', confidence: 0.45, source: 'pattern' },
+                    date: { value: '2024-01-15', confidence: 0.62, source: 'pattern' }
+                },
+                summary: 'Receipt processed with low confidence - image quality issues detected'
+            }
+        ];
+
+        // Initialize with sample data
+        documents = [...sampleDocs];
+
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        async function handleFiles(files) {
+            for (let file of files) {
+                await processFile(file);
+            }
+        }
+
+        async function processFile(file) {
+            const docId = generateId();
+            
+            // Add processing document to UI
+            const processingDoc = {
+                docId,
+                filename: file.name,
+                status: 'processing',
+                docType: 'PROCESSING',
+                docTypeConfidence: 0,
+                needs_review: false,
+                fields: {},
+                summary: 'Processing with ensemble extraction...'
+            };
+            
+            documents.unshift(processingDoc);
+            updateUI();
+
+            try {
+                // Convert file to base64
+                const base64Content = await fileToBase64(file);
+                
+                // Process document
+                const processResponse = await fetch(`${API_BASE}/process-document`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        filename: file.name,
+                        contentBase64: base64Content
+                    })
+                });
+                
+                if (!processResponse.ok) {
+                    throw new Error(`Process failed: ${processResponse.status}`);
+                }
+                
+                const result = await processResponse.json();
+                
+                // Update document with results
+                const docIndex = documents.findIndex(d => d.docId === docId);
+                if (docIndex !== -1) {
+                    documents[docIndex] = {
+                        docId: result.docId || docId,
+                        filename: file.name,
+                        status: 'completed',
+                        docType: result.docType || 'Unknown',
+                        docTypeConfidence: result.docTypeConfidence || 0,
+                        needs_review: result.needs_review || false,
+                        extraction_sources: result.extraction_sources || ['textract'],
+                        fields: result.fields || {},
+                        summary: result.summary || 'Document processed successfully'
+                    };
+                }
+            } catch (error) {
+                console.error('Processing error:', error);
+                const docIndex = documents.findIndex(d => d.docId === docId);
+                if (docIndex !== -1) {
+                    documents[docIndex] = {
+                        ...processingDoc,
+                        status: 'error',
+                        docType: 'ERROR',
+                        needs_review: true,
+                        summary: error.message || 'Processing failed'
+                    };
+                }
+            }
+
+            updateUI();
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = reader.result;
+                    const base64 = dataUrl.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function generateId() {
+            return 'doc_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function updateUI() {
+            updateStats();
+            updateDocumentGrid();
+        }
+
+        function updateStats() {
+            const total = documents.length;
+            const processed = documents.filter(d => d.status === 'completed').length;
+            const needsReview = documents.filter(d => d.needs_review).length;
+            const avgConf = processed > 0 ? 
+                Math.round(documents.filter(d => d.status === 'completed')
+                    .reduce((sum, d) => sum + (d.docTypeConfidence || 0), 0) / processed * 100) : 0;
+
+            document.getElementById('totalDocs').textContent = total;
+            document.getElementById('processedDocs').textContent = processed;
+            document.getElementById('avgConfidence').textContent = avgConf + '%';
+            document.getElementById('needsReview').textContent = needsReview;
+        }
+
+        function updateDocumentGrid() {
+            const grid = document.getElementById('documentGrid');
+            const searchTerm = document.getElementById('searchBar').value.toLowerCase();
+            const activeFilter = document.querySelector('.filter-tab.active').dataset.filter;
+
+            filteredDocs = documents.filter(doc => {
+                // Filter by type
+                if (activeFilter === 'needs-review') {
+                    if (!doc.needs_review) return false;
+                } else if (activeFilter !== 'all' && doc.docType !== activeFilter) {
+                    return false;
+                }
+                
+                // Filter by search term
+                if (searchTerm) {
+                    const searchableText = [
+                        doc.filename,
+                        doc.docType,
+                        doc.summary,
+                        ...Object.values(doc.fields || {}).map(f => typeof f === 'object' ? f.value : f)
+                    ].join(' ').toLowerCase();
+                    
+                    if (!searchableText.includes(searchTerm)) return false;
+                }
+                
+                return true;
+            });
+
+            grid.innerHTML = filteredDocs.map(doc => createDocumentCard(doc)).join('');
+        }
+
+        function createDocumentCard(doc) {
+            const needsReview = doc.needs_review || (doc.docTypeConfidence || 0) < 0.8;
+            
+            return `
+                <div class="document-card ${doc.status === 'processing' ? 'processing' : ''} ${doc.status === 'error' ? 'error' : ''} ${needsReview ? 'needs-review' : ''}" onclick="openHighAccuracyViewer('${doc.filename}')">
+                    <div class="doc-header">
+                        <div class="doc-type">${doc.docType} | ${Math.round((doc.docTypeConfidence || 0) * 100)}%</div>
+                        ${needsReview ? '<div class="review-badge">⚠️ REVIEW</div>' : ''}
+                    </div>
+                    <h4>${doc.filename}</h4>
+                    ${needsReview ? '<div class="review-banner">Low confidence fields or validation errors detected</div>' : ''}
+                    ${doc.extraction_sources ? `<div class="sources">Sources: ${doc.extraction_sources.join(', ')}</div>` : ''}
+                    
+                    ${doc.summary ? `<div class="summary">${doc.summary}</div>` : ''}
+                    
+                    ${renderExtractedFields(doc.fields)}
+                </div>
+            `;
+        }
+
+        function renderExtractedFields(fields) {
+            if (!fields || Object.keys(fields).length === 0) return '';
+            
+            const items = Object.entries(fields)
+                .filter(([_, v]) => v && (typeof v === 'object' ? v.value : v))
+                .map(([k, v]) => ({
+                    label: formatFieldName(k),
+                    value: typeof v === "object" ? v.value : v,
+                    confidence: typeof v === "object" ? Math.round(100 * (v.confidence || 0.9)) : 90,
+                    source: typeof v === "object" ? v.source : 'unknown',
+                    bbox: typeof v === "object" ? v.bbox : null
+                }))
+                .sort((a, b) => a.label.localeCompare(b.label));
+
+            if (items.length === 0) return '';
+
+            return `
+                <div class="extracted-fields">
+                    <strong>Extracted Fields (${items.length}):</strong>
+                    ${items.slice(0, 6).map(item => `
+                        <div class="field-item ${item.confidence < 60 ? 'low-confidence' : ''}" data-bbox='${JSON.stringify(item.bbox || {})}'>
+                            <span class="field-label">${item.label}</span>
+                            <span class="field-value">${item.value}</span>
+                            <span class="confidence-badge ${item.confidence >= 85 ? 'high' : item.confidence >= 60 ? 'medium' : 'low'}">${item.confidence}%</span>
+                            <span class="source-badge">${item.source}</span>
+                        </div>
+                    `).join('')}
+                    ${items.length > 6 ? `<div class="field-item"><em>+${items.length - 6} more fields</em></div>` : ''}
+                </div>
+            `;
+        }
+
+        function formatFieldName(key) {
+            const labels = {
+                employee_name: "Employee Name",
+                employer_name: "Employer Name",
+                pay_period_start: "Pay Period Start",
+                pay_period_end: "Pay Period End",
+                gross_pay_current: "Gross Pay (Current)",
+                net_pay_current: "Net Pay (Current)",
+                wages: "Wages (Box 1)",
+                federal_tax: "Federal Tax (Box 2)",
+                merchant_name: "Merchant",
+                total_amount: "Total Amount",
+                date: "Date"
+            };
+            return labels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function openHighAccuracyViewer(filename) {
+            // Open high-accuracy viewer in new tab
+            window.open('high-accuracy-viewer.html?doc=' + encodeURIComponent(filename), '_blank');
+        }
+
+        // Filter tabs
+        document.getElementById('filterTabs').addEventListener('click', (e) => {
+            if (e.target.classList.contains('filter-tab')) {
+                document.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
+                e.target.classList.add('active');
+                updateDocumentGrid();
+            }
+        });
+
+        // Search functionality
+        document.getElementById('searchBar').addEventListener('input', updateDocumentGrid);
+
+        // Initialize
+        updateUI();
+    </script>
+</body>
+</html>

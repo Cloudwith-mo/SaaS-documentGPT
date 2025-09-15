@@ -22,9 +22,22 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-# Mock data stores (replace with real DB in production)
+# AWS Integration
+import boto3
+try:
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table('documentgpt-docs')
+    sqs = boto3.client('sqs')
+    ssm = boto3.client('ssm')
+except:
+    # Fallback for local development
+    dynamodb = table = sqs = ssm = None
+
+# Mock data stores (fallback for local dev)
 documents = {}
 chat_sessions = {}
+
+# Production-ready agent presets
 agent_presets = {
     "tax_expert": {
         "name": "Tax Expert",
@@ -45,6 +58,10 @@ agent_presets = {
         "temperature": 0.15
     }
 }
+
+# Configuration
+QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/995805900737/documentgpt-ingest-queue'
+S3_BUCKET = 'documentgpt-uploads-1757887191'
 
 # SSE connections
 sse_connections = {}
@@ -114,27 +131,52 @@ def upload_document():
         
         doc_id = str(uuid.uuid4())
         doc_name = data.get('name', 'Untitled Document')
+        bucket = data.get('bucket', S3_BUCKET)
+        key = data.get('key', f"uploads/{doc_id}/{doc_name}")
         
-        # Mock document processing
+        # Create document record
         document = {
             "id": doc_id,
             "name": doc_name,
-            "status": "processing",
+            "status": "queued",
             "uploaded_at": datetime.utcnow().isoformat(),
             "pages": data.get('pages', 1),
             "size": data.get('size', 0),
-            "type": data.get('type', 'pdf')
+            "type": data.get('type', 'pdf'),
+            "bucket": bucket,
+            "key": key
         }
         
-        documents[doc_id] = document
-        
-        # Simulate processing completion after 2 seconds
-        def complete_processing():
-            time.sleep(2)
-            documents[doc_id]["status"] = "completed"
-            documents[doc_id]["processed_at"] = datetime.utcnow().isoformat()
+        # Store in DynamoDB if available
+        if table:
+            table.put_item(
+                Item={
+                    'tenant': 'default',
+                    'docId': doc_id,
+                    'docName': doc_name,
+                    'status': 'queued',
+                    'bucket': bucket,
+                    'key': key,
+                    'createdAt': datetime.utcnow().isoformat(),
+                    'updatedAt': datetime.utcnow().isoformat()
+                }
+            )
             
-        threading.Thread(target=complete_processing).start()
+            # Queue for processing
+            if sqs:
+                message = {
+                    'docId': doc_id,
+                    'docName': doc_name,
+                    'bucket': bucket,
+                    'key': key
+                }
+                sqs.send_message(
+                    QueueUrl=QUEUE_URL,
+                    MessageBody=json.dumps(message)
+                )
+        else:
+            # Fallback to local storage
+            documents[doc_id] = document
         
         return jsonify({
             "success": True,
@@ -148,9 +190,32 @@ def upload_document():
 @app.route('/api/v5/documents', methods=['GET'])
 def list_documents():
     """List all documents"""
-    return jsonify({
-        "documents": list(documents.values())
-    })
+    try:
+        if table:
+            # Get from DynamoDB
+            response = table.scan(
+                FilterExpression='#tenant = :tenant',
+                ExpressionAttributeNames={'#tenant': 'tenant'},
+                ExpressionAttributeValues={':tenant': 'default'}
+            )
+            docs = response.get('Items', [])
+            # Convert to expected format
+            documents_list = []
+            for doc in docs:
+                documents_list.append({
+                    "id": doc.get('docId'),
+                    "name": doc.get('docName'),
+                    "status": doc.get('status'),
+                    "uploaded_at": doc.get('createdAt'),
+                    "processed_at": doc.get('updatedAt')
+                })
+            return jsonify({"documents": documents_list})
+        else:
+            # Fallback to local storage
+            return jsonify({"documents": list(documents.values())})
+    except Exception as e:
+        logger.error(f"List documents error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/v5/documents/<doc_id>', methods=['GET'])
 def get_document(doc_id):

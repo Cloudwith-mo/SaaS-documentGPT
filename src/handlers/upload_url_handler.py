@@ -4,13 +4,29 @@ import uuid
 from datetime import datetime, timedelta
 
 s3 = boto3.client('s3')
-BUCKET = 'taxflowsai-uploads'
+BUCKET = 'documentgpt-uploads-1757887191'
 
 def lambda_handler(event, context):
+    headers = {
+        'Access-Control-Allow-Origin': 'https://documentgpt.io',
+        'Access-Control-Allow-Methods': 'POST,OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type,Authorization'
+    }
+    
+    if event.get('httpMethod') == 'OPTIONS':
+        return {'statusCode': 200, 'headers': headers, 'body': ''}
+    
     try:
-        params = event.get('queryStringParameters') or {}
-        filename = params.get('filename', 'document.png')
-        content_type = params.get('contentType', 'image/png')
+        # Handle POST request with JSON body
+        if event.get('body'):
+            body = json.loads(event['body'])
+            filename = body.get('filename', 'document.pdf')
+            content_type = body.get('contentType', 'application/pdf')
+        else:
+            # Fallback to query parameters
+            params = event.get('queryStringParameters') or {}
+            filename = params.get('filename', 'document.pdf')
+            content_type = params.get('contentType', 'application/pdf')
         
         # Generate unique S3 key
         key = f"uploads/{uuid.uuid4()}_{filename}"
@@ -24,13 +40,9 @@ def lambda_handler(event, context):
         
         return {
             'statusCode': 200,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET,OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type'
-            },
+            'headers': headers,
             'body': json.dumps({
-                'url': url,
+                'uploadUrl': url,
                 'key': key,
                 'bucket': BUCKET
             })
@@ -38,6 +50,6 @@ def lambda_handler(event, context):
     except Exception as e:
         return {
             'statusCode': 500,
-            'headers': {'Access-Control-Allow-Origin': '*'},
+            'headers': headers,
             'body': json.dumps({'error': str(e)})
         }

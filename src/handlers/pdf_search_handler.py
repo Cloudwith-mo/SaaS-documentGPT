@@ -36,19 +36,19 @@ def lambda_handler(event, context):
                 'body': json.dumps({'error': 'Invalid input detected'})
             }
         
-        # Mock search results for now
-        results = [
+        # Mock search results with normalized bbox coordinates (0-1 range)
+        matches = [
             {
                 "page": 1,
                 "text": f"Search result for: {query}",
                 "confidence": 0.95,
-                "bbox": [100, 200, 300, 250]
+                "bbox": {"x": 0.25, "y": 0.30, "w": 0.40, "h": 0.08}
             },
             {
                 "page": 2, 
                 "text": f"Another relevant passage for: {query}",
                 "confidence": 0.87,
-                "bbox": [150, 300, 400, 350]
+                "bbox": {"x": 0.15, "y": 0.50, "w": 0.60, "h": 0.12}
             }
         ]
         
@@ -61,8 +61,8 @@ def lambda_handler(event, context):
                 'Access-Control-Allow-Headers': 'Content-Type'
             },
             'body': json.dumps({
-                'results': results,
-                'total': len(results),
+                'matches': matches,
+                'total': len(matches),
                 'query': query
             })
         }

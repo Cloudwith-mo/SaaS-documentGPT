@@ -1,0 +1,91 @@
+{
+  "validation_date": "2025-09-16T03:09:10.772131",
+  "summary": {
+    "total_tests": 10,
+    "passed_tests": 6,
+    "critical_failures": 1,
+    "success_rate": 60.0
+  },
+  "results": [
+    {
+      "category": "Health",
+      "test": "Main Health Check",
+      "passed": false,
+      "critical": true,
+      "details": "Status: 400",
+      "timestamp": "2025-09-16T03:09:07.978305"
+    },
+    {
+      "category": "Performance",
+      "test": "Health Response Time",
+      "passed": true,
+      "critical": false,
+      "details": "0.20s (target: <2s)",
+      "timestamp": "2025-09-16T03:09:08.180201"
+    },
+    {
+      "category": "Security",
+      "test": "CORS Headers",
+      "passed": true,
+      "critical": false,
+      "details": "CORS configured: True",
+      "timestamp": "2025-09-16T03:09:08.371559"
+    },
+    {
+      "category": "Security",
+      "test": "XSS Input Validation",
+      "passed": true,
+      "critical": false,
+      "details": "Handled XSS payload: 400",
+      "timestamp": "2025-09-16T03:09:08.545488"
+    },
+    {
+      "category": "Documents",
+      "test": "Upload URL Generation",
+      "passed": false,
+      "critical": false,
+      "details": "Status: 403",
+      "timestamp": "2025-09-16T03:09:08.756332"
+    },
+    {
+      "category": "Documents",
+      "test": "Document Listing",
+      "passed": true,
+      "critical": false,
+      "details": "Status: 200",
+      "timestamp": "2025-09-16T03:09:09.516133"
+    },
+    {
+      "category": "AI",
+      "test": "RAG Query Processing",
+      "passed": true,
+      "critical": false,
+      "details": "Status: 400",
+      "timestamp": "2025-09-16T03:09:09.800236"
+    },
+    {
+      "category": "Error Handling",
+      "test": "Malformed JSON",
+      "passed": false,
+      "critical": false,
+      "details": "Status: 500",
+      "timestamp": "2025-09-16T03:09:09.977768"
+    },
+    {
+      "category": "Performance",
+      "test": "Concurrent Requests",
+      "passed": false,
+      "critical": false,
+      "details": "Success rate: 0.0%",
+      "timestamp": "2025-09-16T03:09:10.471880"
+    },
+    {
+      "category": "Frontend",
+      "test": "External Dependencies",
+      "passed": true,
+      "critical": false,
+      "details": "Lucide icons: 200",
+      "timestamp": "2025-09-16T03:09:10.771837"
+    }
+  ]
+}

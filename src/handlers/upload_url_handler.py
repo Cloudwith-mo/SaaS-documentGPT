@@ -3,12 +3,9 @@ import boto3
 import uuid
 from datetime import datetime, timedelta
 
-s3 = boto3.client('s3')
-BUCKET = 'documentgpt-uploads-1757887191'
-
 def lambda_handler(event, context):
     headers = {
-        'Access-Control-Allow-Origin': 'https://documentgpt.io',
+        'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST,OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type,Authorization'
     }
@@ -17,16 +14,40 @@ def lambda_handler(event, context):
         return {'statusCode': 200, 'headers': headers, 'body': ''}
     
     try:
-        # Handle POST request with JSON body
-        if event.get('body'):
+        # Input validation
+        if not event.get('body'):
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Request body required'})
+            }
+        
+        try:
             body = json.loads(event['body'])
-            filename = body.get('filename', 'document.pdf')
-            content_type = body.get('contentType', 'application/pdf')
-        else:
-            # Fallback to query parameters
-            params = event.get('queryStringParameters') or {}
-            filename = params.get('filename', 'document.pdf')
-            content_type = params.get('contentType', 'application/pdf')
+        except json.JSONDecodeError:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Invalid JSON format'})
+            }
+        
+        # Extract filename and content type with multiple field name support
+        filename = body.get('fileName') or body.get('filename') or body.get('name')
+        content_type = body.get('fileType') or body.get('contentType') or body.get('type')
+        
+        if not filename:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'fileName is required'})
+            }
+        
+        if not content_type:
+            content_type = 'application/pdf'  # Default
+        
+        # Initialize S3 client
+        s3 = boto3.client('s3')
+        bucket = 'documentgpt-uploads-1757887191'
         
         # Generate unique S3 key
         key = f"uploads/{uuid.uuid4()}_{filename}"
@@ -34,7 +55,7 @@ def lambda_handler(event, context):
         # Generate presigned URL
         url = s3.generate_presigned_url(
             'put_object',
-            Params={'Bucket': BUCKET, 'Key': key, 'ContentType': content_type},
+            Params={'Bucket': bucket, 'Key': key, 'ContentType': content_type},
             ExpiresIn=3600
         )
         
@@ -44,12 +65,13 @@ def lambda_handler(event, context):
             'body': json.dumps({
                 'uploadUrl': url,
                 'key': key,
-                'bucket': BUCKET
+                'bucket': bucket
             })
         }
+        
     except Exception as e:
         return {
             'statusCode': 500,
             'headers': headers,
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': f'Internal server error: {str(e)}'})
         }

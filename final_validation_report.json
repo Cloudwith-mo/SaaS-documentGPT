@@ -1,0 +1,77 @@
+{
+  "timestamp": "2025-09-16T03:10:36.089939",
+  "summary": {
+    "total_tests": 11,
+    "passed_tests": 7,
+    "success_rate": 63.63636363636363,
+    "critical_failures": 1
+  },
+  "results": [
+    {
+      "test": "Health Endpoint",
+      "passed": false,
+      "critical": true,
+      "details": "Status: 400"
+    },
+    {
+      "test": "Document Listing",
+      "passed": true,
+      "critical": false,
+      "details": "Status: 200"
+    },
+    {
+      "test": "RAG Processing",
+      "passed": true,
+      "critical": false,
+      "details": "Status: 400"
+    },
+    {
+      "test": "Upload URL Generation",
+      "passed": false,
+      "critical": false,
+      "details": "Status: 403"
+    },
+    {
+      "test": "Malformed JSON Handling",
+      "passed": false,
+      "critical": false,
+      "details": "Status: 500 (expected 4xx)"
+    },
+    {
+      "test": "Missing Fields Validation",
+      "passed": true,
+      "critical": false,
+      "details": "Status: 400 (expected 400)"
+    },
+    {
+      "test": "XSS Protection",
+      "passed": true,
+      "critical": false,
+      "details": "Status: 400 (expected 400)"
+    },
+    {
+      "test": "Response Time",
+      "passed": false,
+      "critical": false,
+      "details": "0.19s (target: <2s)"
+    },
+    {
+      "test": "Concurrent Requests",
+      "passed": true,
+      "critical": false,
+      "details": "Success rate: 100.0%"
+    },
+    {
+      "test": "CORS Configuration",
+      "passed": true,
+      "critical": false,
+      "details": "CORS headers present: True"
+    },
+    {
+      "test": "Input Size Validation",
+      "passed": true,
+      "critical": false,
+      "details": "Status: 400 (expected 400)"
+    }
+  ]
+}

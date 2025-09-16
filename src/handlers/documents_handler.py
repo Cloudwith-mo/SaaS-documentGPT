@@ -28,7 +28,11 @@ def lambda_handler(event, context):
             
     except Exception as e:
         print(f"Error: {str(e)}")
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({'documents': [], 'error': str(e)})
+        }
 
 def get_documents(event, headers):
     user_id = event.get('queryStringParameters', {}).get('userId', 'guest')

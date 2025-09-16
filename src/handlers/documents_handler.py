@@ -8,7 +8,7 @@ table = dynamodb.Table('ParsePilot-Facts')  # Use facts table instead
 def lambda_handler(event, context):
     headers = {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': 'https://d11rn2gcciu6ti.cloudfront.net',
+        'Access-Control-Allow-Origin': 'https://documentgpt.io',
         'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Api-Key',
         'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
     }
@@ -47,25 +47,17 @@ def get_documents(event, headers):
             if doc_id and doc_id not in docs:
                 docs[doc_id] = {
                     'docId': doc_id,
-                    'docType': item.get('doc_type', 'Unknown'),
-                    'filename': f"{doc_id}.pdf",
+                    'docName': f"{doc_id}.pdf",
                     'status': 'completed',
-                    'fields': {},
-                    'uploadDate': item.get('created_at', 0)
+                    'createdAt': item.get('created_at', 0)
                 }
-            
-            if doc_id and item.get('field_key'):
-                field_key = item.get('field_key')
-                value = item.get('value_str') or item.get('value_num')
-                if value:
-                    docs[doc_id]['fields'][field_key] = value
         
-        items = list(docs.values())
+        documents = list(docs.values())
         
         return {
             'statusCode': 200,
             'headers': headers,
-            'body': json.dumps({'items': items})
+            'body': json.dumps({'documents': documents})
         }
         
     except Exception as e:
@@ -73,7 +65,7 @@ def get_documents(event, headers):
         return {
             'statusCode': 200,
             'headers': headers,
-            'body': json.dumps({'items': []})
+            'body': json.dumps({'documents': []})
         }
 
 def save_document(event, headers):

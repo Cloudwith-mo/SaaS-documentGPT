@@ -1,0 +1,123 @@
+{
+  "timestamp": "2025-09-16T04:09:27.433472",
+  "summary": {
+    "total_tests": 16,
+    "passed": 12,
+    "failed": 4,
+    "success_rate": 75.0
+  },
+  "results": [
+    {
+      "test": "Health Check",
+      "status": "\u274c FAIL",
+      "success": false,
+      "details": "Status: 403",
+      "timestamp": "2025-09-16T04:09:15.271392"
+    },
+    {
+      "test": "V5 Health Check",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "Status: 200",
+      "timestamp": "2025-09-16T04:09:15.621075"
+    },
+    {
+      "test": "Documents List",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "Found 10 documents",
+      "timestamp": "2025-09-16T04:09:22.527572"
+    },
+    {
+      "test": "Presign URL",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "Upload URL generated: True",
+      "timestamp": "2025-09-16T04:09:23.414406"
+    },
+    {
+      "test": "RAG Query",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "Answer received: True",
+      "timestamp": "2025-09-16T04:09:24.548475"
+    },
+    {
+      "test": "PDF Content",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "Content retrieved: True",
+      "timestamp": "2025-09-16T04:09:25.568492"
+    },
+    {
+      "test": "Agents Config",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "Agents available: True",
+      "timestamp": "2025-09-16T04:09:25.986195"
+    },
+    {
+      "test": "Multi-Agent Debate",
+      "status": "\u274c FAIL",
+      "success": false,
+      "details": "Status: 403",
+      "timestamp": "2025-09-16T04:09:26.171010"
+    },
+    {
+      "test": "CORS - health",
+      "status": "\u274c FAIL",
+      "success": false,
+      "details": "CORS headers present: False",
+      "timestamp": "2025-09-16T04:09:26.324650"
+    },
+    {
+      "test": "CORS - rag",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "CORS headers present: True",
+      "timestamp": "2025-09-16T04:09:26.507406"
+    },
+    {
+      "test": "CORS - agents",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "CORS headers present: True",
+      "timestamp": "2025-09-16T04:09:26.683199"
+    },
+    {
+      "test": "UI React Features",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "Found 6/6 features",
+      "timestamp": "2025-09-16T04:09:26.684911"
+    },
+    {
+      "test": "UI API Configuration",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "Configured 2/2 endpoints",
+      "timestamp": "2025-09-16T04:09:26.684939"
+    },
+    {
+      "test": "Performance - Health Check",
+      "status": "\u274c FAIL",
+      "success": false,
+      "details": "142ms (Status: 403)",
+      "timestamp": "2025-09-16T04:09:26.827372"
+    },
+    {
+      "test": "Performance - Documents List",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "435ms (Status: 200)",
+      "timestamp": "2025-09-16T04:09:27.262700"
+    },
+    {
+      "test": "Performance - Agents Config",
+      "status": "\u2705 PASS",
+      "success": true,
+      "details": "171ms (Status: 200)",
+      "timestamp": "2025-09-16T04:09:27.433272"
+    }
+  ]
+}

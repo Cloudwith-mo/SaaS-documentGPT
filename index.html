@@ -100,28 +100,23 @@
         }
 
         async function chat(question) {
-            if (!docId) {
-                alert('Upload a document first.');
-                return;
-            }
-
             const id = Math.random().toString(36).slice(2);
             addMessage('user', question);
             addMessage('assistant', '');
             render();
 
             try {
-                // Simulate streaming response
-                const response = `Based on the document "${fileName}", here's what I found regarding "${question}". This is a simulated response - connect to OpenAI API for real answers.`;
+                const response = await fetch('https://kufufm7r9a.execute-api.us-east-1.amazonaws.com/prod/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
                 
-                let accumulated = '';
-                for (let i = 0; i < response.length; i++) {
-                    accumulated += response[i];
-                    messages[messages.length - 1].text = accumulated;
-                    render();
-                    await new Promise(resolve => setTimeout(resolve, 20));
-                }
+                const data = await response.json();
+                messages[messages.length - 1].text = data.answer || 'Sorry, I could not complete that.';
+                render();
             } catch (error) {
+                console.error('Chat error:', error);
                 messages[messages.length - 1].text = 'Sorry, I could not complete that.';
                 render();
             }

@@ -72,35 +72,64 @@
         }
 
         // File upload
+        let documentUrl = '';
+        
         async function uploadFile(file) {
             fileName = file.name;
             status = 'PROCESSING';
             render();
 
             try {
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const content = e.target.result;
-                    docId = 'doc_' + Date.now();
-                    
-                    const response = await fetch('https://kufufm7r9a.execute-api.us-east-1.amazonaws.com/prod/process-document', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ docId, filename: file.name, content })
-                    });
-                    
-                    const data = await response.json();
-                    if (data.status === 'READY') {
-                        status = 'READY';
-                        pages = data.chunks || 1;
-                        addMessage('system', `Document "${file.name}" processed with ${data.chunks} chunks. Ask questions about it!`);
-                    } else {
-                        status = 'ERROR';
-                    }
-                    render();
-                };
-                reader.readAsText(file);
+                // Step 1: Get upload URL
+                const uploadResponse = await fetch('https://kufufm7r9a.execute-api.us-east-1.amazonaws.com/prod/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        filename: file.name, 
+                        contentType: file.type || 'application/octet-stream' 
+                    })
+                });
+                
+                const uploadData = await uploadResponse.json();
+                docId = uploadData.docId;
+                documentUrl = uploadData.downloadUrl;
+                
+                // Step 2: Upload file to S3
+                const s3Response = await fetch(uploadData.uploadUrl, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+                    body: file
+                });
+                
+                if (!s3Response.ok) throw new Error('Upload failed');
+                
+                // Step 3: Process for RAG (if text file)
+                if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+                    const reader = new FileReader();
+                    reader.onload = async (e) => {
+                        const content = e.target.result;
+                        const processResponse = await fetch('https://kufufm7r9a.execute-api.us-east-1.amazonaws.com/prod/process-document', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ docId, filename: file.name, content })
+                        });
+                        
+                        const processData = await processResponse.json();
+                        if (processData.status === 'READY') {
+                            pages = processData.chunks || 1;
+                            addMessage('system', `Document "${file.name}" uploaded and processed with ${processData.chunks} chunks. Ask questions about it!`);
+                        }
+                    };
+                    reader.readAsText(file);
+                } else {
+                    pages = 1;
+                    addMessage('system', `Document "${file.name}" uploaded successfully. Preview available in center panel.`);
+                }
+                
+                status = 'READY';
+                render();
             } catch (error) {
+                console.error('Upload error:', error);
                 status = 'ERROR';
                 render();
             }
@@ -275,7 +304,23 @@
                                         ${status === 'PROCESSING' ? `<div class="absolute top-4 right-6 z-10 text-xs px-2 py-1 rounded border ${isDark ? 'bg-amber-900/40 text-amber-200 border-amber-200/30' : 'bg-amber-100 text-amber-800 border-amber-200/60'}">Processing…</div>` : ''}
                                         ${findNote ? `<div class="absolute top-4 left-6 z-10 text-xs px-2 py-1 rounded border ${isDark ? 'bg-sky-900/40 text-sky-200 border-sky-200/30' : 'bg-sky-100 text-sky-800 border-sky-200/60'}">${findNote}</div>` : ''}
                                         <div class="mx-auto max-w-[1100px] min-h-[900px] rounded-lg shadow-sm flex items-center justify-center relative transition-colors border ${isDark ? 'bg-neutral-900 text-gray-400 border-white/10' : 'bg-white text-gray-500'}">
-                                            ${pages > 0 ? '<div class="text-center">PDF viewer would render here</div>' : '<div class="pointer-events-none select-none">Drop a PDF to view (upload begins automatically)</div>'}
+                                            ${documentUrl ? `
+                                                <div class="w-full h-full p-4">
+                                                    ${fileName.toLowerCase().endsWith('.pdf') ? 
+                                                        `<embed src="${documentUrl}" type="application/pdf" class="w-full h-full rounded" />` :
+                                                        fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i) ?
+                                                        `<img src="${documentUrl}" alt="${fileName}" class="max-w-full max-h-full object-contain mx-auto" />` :
+                                                        `<div class="text-center p-8">
+                                                            <div class="text-6xl mb-4">📄</div>
+                                                            <h3 class="text-lg font-medium mb-2">${fileName}</h3>
+                                                            <p class="text-sm opacity-75 mb-4">Document uploaded successfully</p>
+                                                            <a href="${documentUrl}" target="_blank" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                                                <span class="mr-2">📥</span> Download
+                                                            </a>
+                                                        </div>`
+                                                    }
+                                                </div>
+                                            ` : '<div class="pointer-events-none select-none">Drop a document to view (upload begins automatically)</div>'}
                                         </div>
                                     </div>
                                 </div>

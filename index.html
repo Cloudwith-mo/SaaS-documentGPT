@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocumentGPT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-gray-50">
+    <div class="container mx-auto px-4 py-8">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">DocumentGPT</h1>
+            <p class="text-gray-600">Upload documents, ask questions, get answers</p>
+        </div>
+        
+        <div class="max-w-4xl mx-auto">
+            <!-- Upload Area -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Upload Document</h2>
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                    <input type="file" id="fileInput" class="hidden" accept=".pdf,.doc,.docx,.txt">
+                    <button onclick="document.getElementById('fileInput').click()" 
+                            class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                        Choose File
+                    </button>
+                    <p class="text-gray-500 mt-2">Or drag and drop a file here</p>
+                </div>
+                <div id="uploadStatus" class="mt-4 text-sm text-gray-600"></div>
+            </div>
+            
+            <!-- Chat Area -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">Chat with Document</h2>
+                <div id="chatMessages" class="h-64 overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50">
+                    <p class="text-gray-500 text-center">Upload a document to start chatting</p>
+                </div>
+                <div class="flex gap-2">
+                    <input type="text" id="messageInput" placeholder="Ask a question about your document..." 
+                           class="flex-1 border rounded-lg px-4 py-2" disabled>
+                    <button onclick="sendMessage()" id="sendBtn" 
+                            class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50" disabled>
+                        Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentDocId = null;
+        
+        // File upload handling
+        document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+        
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            updateStatus('Uploading...');
+            
+            try {
+                // Simulate upload and processing
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                currentDocId = 'doc_' + Date.now();
+                updateStatus('Document ready! Ask questions below.');
+                
+                // Enable chat
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                
+                addMessage('system', `Document "${file.name}" uploaded successfully. You can now ask questions about it.`);
+                
+            } catch (error) {
+                updateStatus('Upload failed. Please try again.');
+                console.error('Upload error:', error);
+            }
+        }
+        
+        function updateStatus(message) {
+            document.getElementById('uploadStatus').textContent = message;
+        }
+        
+        function addMessage(role, text) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `mb-3 ${role === 'user' ? 'text-right' : 'text-left'}`;
+            
+            const bubble = document.createElement('div');
+            bubble.className = `inline-block px-4 py-2 rounded-lg max-w-xs ${
+                role === 'user' 
+                    ? 'bg-blue-600 text-white' 
+                    : role === 'system'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-gray-200 text-gray-800'
+            }`;
+            bubble.textContent = text;
+            
+            messageDiv.appendChild(bubble);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentDocId) return;
+            
+            addMessage('user', message);
+            input.value = '';
+            
+            // Simulate AI response
+            addMessage('assistant', 'Processing your question...');
+            
+            try {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Replace last message with actual response
+                const messages = document.getElementById('chatMessages');
+                messages.removeChild(messages.lastChild);
+                
+                addMessage('assistant', `Based on the document, here's what I found regarding "${message}". This is a simulated response - connect to OpenAI API for real answers.`);
+                
+            } catch (error) {
+                console.error('Chat error:', error);
+                addMessage('assistant', 'Sorry, I encountered an error processing your question.');
+            }
+        }
+        
+        // Enter key support
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

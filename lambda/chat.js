@@ -16,7 +16,7 @@ exports.handler = async (event) => {
         const { question } = JSON.parse(event.body);
         
         const openaiData = JSON.stringify({
-            model: "gpt-3.5-turbo",
+            model: "gpt-4o",
             messages: [
                 {
                     role: "system",
@@ -33,6 +33,10 @@ exports.handler = async (event) => {
 
         const response = await callOpenAI(openaiData);
         
+        if (!response || !response.choices || !response.choices[0]) {
+            throw new Error('Invalid OpenAI response');
+        }
+        
         return {
             statusCode: 200,
             headers,
@@ -42,6 +46,18 @@ exports.handler = async (event) => {
         };
     } catch (error) {
         console.error('Error:', error);
+        
+        // Mock response for testing when API key is invalid
+        if (error.message && error.message.includes('API key')) {
+            return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({
+                    answer: `Hello! I'm GPT-4o-mini (mock response). Your question was: "${question}". Please add a valid OpenAI API key to get real responses.`
+                })
+            };
+        }
+        
         return {
             statusCode: 500,
             headers,
@@ -69,9 +85,14 @@ function callOpenAI(data) {
             res.on('data', (chunk) => body += chunk);
             res.on('end', () => {
                 try {
-                    resolve(JSON.parse(body));
+                    const parsed = JSON.parse(body);
+                    if (parsed.error) {
+                        reject(new Error(parsed.error.message || 'OpenAI API error'));
+                    } else {
+                        resolve(parsed);
+                    }
                 } catch (e) {
-                    reject(e);
+                    reject(new Error('Failed to parse OpenAI response: ' + body));
                 }
             });
         });

@@ -1,5 +1,8 @@
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { getUserIdFromEvent, addUserPrefix } = require('./multi-tenant-helper');
+const { requireAuth } = require('./auth-helper');
+const { rateLimitResponse } = require('./rate-limit-helper');
 const s3Client = new S3Client({ region: 'us-east-1' });
 
 const BUCKET_NAME = 'documentgpt-uploads';
@@ -7,7 +10,7 @@ const BUCKET_NAME = 'documentgpt-uploads';
 exports.handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, x-api-key, x-user-id',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Content-Type': 'application/json'
     };
@@ -16,9 +19,34 @@ exports.handler = async (event) => {
         return { statusCode: 200, headers, body: '' };
     }
 
+    // Check authentication
+    const authError = requireAuth(event);
+    if (authError) {
+        return authError;
+    }
+
+    const userId = getUserIdFromEvent(event);
+    
+    // Check rate limit
+    const rateLimitResult = rateLimitResponse(userId, 'upload');
+    if (!rateLimitResult.allowed) {
+        return rateLimitResult;
+    }
+
     try {
-        const { filename, contentType } = JSON.parse(event.body);
+        const body = JSON.parse(event.body || '{}');
+        const { filename, contentType } = body;
+        
+        if (!filename || typeof filename !== 'string' || filename.trim() === '') {
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'Valid filename is required' })
+            };
+        }
+        
         const docId = 'doc_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        // Use single-tenant path for now to match Step Functions
         const key = `${docId}/${filename}`;
         
         // Generate presigned URL for upload
@@ -38,9 +66,13 @@ exports.handler = async (event) => {
         
         return {
             statusCode: 200,
-            headers,
+            headers: {
+                ...headers,
+                ...rateLimitResult.headers
+            },
             body: JSON.stringify({
                 docId,
+                userId,
                 uploadUrl,
                 downloadUrl,
                 key,

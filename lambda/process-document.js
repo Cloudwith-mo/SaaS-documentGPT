@@ -1,14 +1,5 @@
-const https = require('https');
-const { Client } = require('pg');
-
-const client = new Client({
-    host: process.env.DB_HOST,
-    database: 'postgres',
-    user: 'postgres',
-    password: process.env.DB_PASSWORD,
-    port: 5432,
-    ssl: { rejectUnauthorized: false }
-});
+const AWS = require('aws-sdk');
+const stepfunctions = new AWS.StepFunctions();
 
 exports.handler = async (event) => {
     const headers = {
@@ -23,89 +14,57 @@ exports.handler = async (event) => {
     }
 
     try {
-        const { docId, filename, content } = JSON.parse(event.body);
+        const body = event.body ? JSON.parse(event.body) : {};
+        const { docId, filename, content, sessionId } = body;
         
-        await client.connect();
-        
-        // Split content into chunks (simple approach)
-        const chunks = splitIntoChunks(content, 1000);
-        
-        // Store document
-        await client.query(`
-            INSERT INTO documents (doc_id, filename, content, embedding)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (doc_id) DO UPDATE SET
-            filename = $2, content = $3, embedding = $4
-        `, [docId, filename, content, JSON.stringify(await getEmbedding(content.substring(0, 8000)))]);
-        
-        // Store chunks with embeddings
-        for (let i = 0; i < chunks.length; i++) {
-            const embedding = await getEmbedding(chunks[i]);
-            await client.query(`
-                INSERT INTO document_chunks (doc_id, chunk_index, content, embedding)
-                VALUES ($1, $2, $3, $4)
-            `, [docId, i, chunks[i], JSON.stringify(embedding)]);
+        if (!docId || !filename) {
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'docId and filename are required' })
+            };
         }
+
+        // Start Step Functions execution
+        const params = {
+            stateMachineArn: 'arn:aws:states:us-east-1:995805900737:stateMachine:documentgpt-processing',
+            name: `${docId}-${Date.now()}`,
+            input: JSON.stringify({
+                docId,
+                filename,
+                s3Key: `${docId}/${filename}`,
+                fileType: filename.split('.').pop() || 'txt',
+                sessionId,
+                textLength: content ? content.length.toString() : '0'
+            })
+        };
+
+        const result = await stepfunctions.startExecution(params).promise();
         
-        await client.end();
+        // Calculate estimated pages
+        const pages = content ? Math.ceil(content.length / 2000) : 1;
         
         return {
             statusCode: 200,
             headers,
             body: JSON.stringify({
+                status: 'PROCESSING',
+                executionArn: result.executionArn,
+                pages,
                 docId,
-                status: 'READY',
-                chunks: chunks.length
+                message: 'Document processing started successfully'
             })
         };
+        
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Process document error:', error);
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ error: 'Failed to process document' })
+            body: JSON.stringify({ 
+                error: 'Failed to start document processing',
+                message: error.message 
+            })
         };
     }
 };
-
-function splitIntoChunks(text, chunkSize) {
-    const chunks = [];
-    for (let i = 0; i < text.length; i += chunkSize) {
-        chunks.push(text.substring(i, i + chunkSize));
-    }
-    return chunks;
-}
-
-async function getEmbedding(text) {
-    const data = JSON.stringify({
-        model: "text-embedding-ada-002",
-        input: text
-    });
-    
-    return new Promise((resolve, reject) => {
-        const options = {
-            hostname: 'api.openai.com',
-            port: 443,
-            path: '/v1/embeddings',
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-                'Content-Length': Buffer.byteLength(data)
-            }
-        };
-
-        const req = https.request(options, (res) => {
-            let body = '';
-            res.on('data', (chunk) => body += chunk);
-            res.on('end', () => {
-                const parsed = JSON.parse(body);
-                resolve(parsed.data[0].embedding);
-            });
-        });
-
-        req.on('error', reject);
-        req.write(data);
-        req.end();
-    });
-}

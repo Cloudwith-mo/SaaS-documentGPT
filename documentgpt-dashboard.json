@@ -1,0 +1,183 @@
+{
+  "widgets": [
+    {
+      "type": "text",
+      "x": 0,
+      "y": 0,
+      "width": 24,
+      "height": 2,
+      "properties": {
+        "markdown": "# DocumentGPT — Observability Dashboard  \n\n**Purpose:** monitor ingestion → parsing → indexing → chat pipeline (presigned upload → S3 → StepFunctions → Parser/Textract → Indexer/OpenAI → Chat → DynamoDB).  \n\n**Instructions:** Replace placeholders in metric dimension values (function names, table names, bucket, state machine ARN, API id/stage). Emit custom metrics to `DocumentGPT` namespace from Lambdas (sample below)."
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 2,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "title": "API Gateway — Latency (p50/p95) and 5xx",
+        "region": "us-east-1",
+        "metrics": [
+          [ "AWS/ApiGateway", "Latency", "ApiName", "kufufm7r9a", { "stat": "p50", "label": "p50 Latency" } ],
+          [ ".", "Latency", ".", ".", { "stat": "p95", "label": "p95 Latency" } ],
+          [ ".", "5xxError", ".", ".", { "stat": "Sum", "label": "5xx Errors" } ]
+        ],
+        "period": 60
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 2,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "title": "Lambda Durations & Errors (Parser / Indexer / Chat)",
+        "region": "us-east-1",
+        "metrics": [
+          [ "AWS/Lambda", "Duration", "FunctionName", "documentgpt-parser", { "stat": "p95", "label": "Parser p95 (ms)" } ],
+          [ "AWS/Lambda", "Duration", "FunctionName", "documentgpt-indexer", { "stat": "p95", "label": "Indexer p95 (ms)" } ],
+          [ "AWS/Lambda", "Duration", "FunctionName", "documentgpt-rag-chat-v2", { "stat": "p95", "label": "Chat p95 (ms)" } ],
+          [ ".", "Errors", "FunctionName", "documentgpt-parser", { "stat": "Sum", "label": "Parser Errors" } ],
+          [ ".", "Errors", "FunctionName", "documentgpt-indexer", { "stat": "Sum", "label": "Indexer Errors" } ],
+          [ ".", "Errors", "FunctionName", "documentgpt-rag-chat-v2", { "stat": "Sum", "label": "Chat Errors" } ]
+        ],
+        "period": 60,
+        "stacked": false
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 8,
+      "width": 12,
+      "height": 5,
+      "properties": {
+        "view": "timeSeries",
+        "title": "Step Functions — Executions (Started / Succeeded / Failed)",
+        "region": "us-east-1",
+        "metrics": [
+          [ "AWS/States", "ExecutionsStarted", "StateMachineArn", "arn:aws:states:us-east-1:995805900737:stateMachine:documentgpt-processing", { "stat": "Sum", "label": "Started" } ],
+          [ ".", "ExecutionsSucceeded", "StateMachineArn", "arn:aws:states:us-east-1:995805900737:stateMachine:documentgpt-processing", { "stat": "Sum", "label": "Succeeded" } ],
+          [ ".", "ExecutionsFailed", "StateMachineArn", "arn:aws:states:us-east-1:995805900737:stateMachine:documentgpt-processing", { "stat": "Sum", "label": "Failed" } ]
+        ],
+        "period": 60
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 8,
+      "width": 12,
+      "height": 5,
+      "properties": {
+        "view": "timeSeries",
+        "title": "S3 — Uploads / Derived files / Errors",
+        "region": "us-east-1",
+        "metrics": [
+          [ "AWS/S3", "NumberOfObjects", "BucketName", "documentgpt-uploads", "StorageType", "AllStorageTypes", { "stat": "Average", "label": "NumObjects" } ],
+          [ "AWS/S3", "AllRequests", "BucketName", "documentgpt-uploads", { "stat": "Sum", "label": "AllRequests" } ],
+          [ "AWS/S3", "4xxErrors", "BucketName", "documentgpt-uploads", { "stat": "Sum", "label": "4xx" } ],
+          [ ".", "5xxErrors", "BucketName", "documentgpt-uploads", { "stat": "Sum", "label": "5xx" } ]
+        ],
+        "period": 60
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 13,
+      "width": 12,
+      "height": 5,
+      "properties": {
+        "view": "timeSeries",
+        "title": "DynamoDB — Uploads table (Consumed capacity, throttles, latency)",
+        "region": "us-east-1",
+        "metrics": [
+          [ "AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "documentgpt-documents", { "stat": "Sum", "label": "ReadRCU" } ],
+          [ ".", "ConsumedWriteCapacityUnits", "TableName", "documentgpt-documents", { "stat": "Sum", "label": "WriteRCU" } ],
+          [ ".", "ThrottledRequests", "TableName", "documentgpt-documents", { "stat": "Sum", "label": "Throttled" } ],
+          [ ".", "SuccessfulRequestLatency", "TableName", "documentgpt-documents", { "stat": "p95", "label": "p95 Latency (ms)" } ]
+        ],
+        "period": 60
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 13,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "view": "timeSeries",
+        "title": "DocumentGPT — Custom metrics (Parser / Indexer / Embeddings / Chat)",
+        "region": "us-east-1",
+        "metrics": [
+          [ "DocumentGPT", "ParserDurationMs", { "stat": "p95", "label": "Parser p95 (ms)" } ],
+          [ "DocumentGPT", "IndexerDurationMs", { "stat": "p95", "label": "Indexer p95 (ms)" } ],
+          [ "DocumentGPT", "EmbeddingAPICalls", { "stat": "Sum", "label": "Embedding API Calls" } ],
+          [ "DocumentGPT", "ChatLatencyMs", { "stat": "p95", "label": "Chat p95 (ms)" } ],
+          [ "DocumentGPT", "RetrievalLatencyMs", { "stat": "p95", "label": "Retrieval p95 (ms)" } ]
+        ],
+        "period": 60,
+        "stacked": false
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 19,
+      "width": 8,
+      "height": 5,
+      "properties": {
+        "view": "singleValue",
+        "title": "Docs currently processing (gauge)",
+        "region": "us-east-1",
+        "metrics": [
+          [ "DocumentGPT", "DocsInProcessing", { "stat": "Maximum", "label": "InProcessing" } ]
+        ],
+        "period": 60
+      }
+    },
+
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 19,
+      "width": 8,
+      "height": 5,
+      "properties": {
+        "view": "timeSeries",
+        "title": "Chat Q/A writes to DynamoDB (count & latency)",
+        "region": "us-east-1",
+        "metrics": [
+          [ "DocumentGPT", "QA_DDB_Writes", { "stat": "Sum", "label": "QA Writes" } ],
+          [ "AWS/DynamoDB", "SuccessfulRequestLatency", "TableName", "documentgpt-chat", { "stat": "p95", "label": "DDB p95 (ms)" } ]
+        ],
+        "period": 60
+      }
+    },
+
+    {
+      "type": "text",
+      "x": 16,
+      "y": 19,
+      "width": 8,
+      "height": 5,
+      "properties": {
+        "markdown": "### Next steps / alarms  \n- Create CloudWatch Alarms for: StepFunctions `ExecutionsFailed` > 0, Lambda errors > 0 (by function), ParserDuration p95 > X ms, ChatLatency p95 > Y ms, DynamoDB ThrottledRequests > 0.  \n- Emit the `DocumentGPT` custom metrics from Lambdas using `PutMetricData` (sample below).  \n- For StepFunctions Textract: monitor job counts & failures separately (consider SNS alert on Textract job failures)."
+      }
+    }
+  ]
+}

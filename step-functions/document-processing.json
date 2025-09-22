@@ -1,0 +1,135 @@
+{
+  "Comment": "DocumentGPT Document Processing Pipeline",
+  "StartAt": "UpdateStatusUploaded",
+  "States": {
+    "UpdateStatusUploaded": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:putItem",
+      "Parameters": {
+        "TableName": "documentgpt-documents",
+        "Item": {
+          "docId": {"S.$": "$.docId"},
+          "status": {"S": "s1.ckpt-06.upload"},
+          "filename": {"S.$": "$.filename"},
+          "s3Key": {"S.$": "$.s3Key"},
+          "uploadedAt": {"S.$": "$$.State.EnteredTime"},
+          "fileType": {"S.$": "$.fileType"}
+        }
+      },
+      "ResultPath": "$.dynamoResult",
+      "Next": "ParseDocument"
+    },
+    "ParseDocument": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:995805900737:function:documentgpt-parser",
+      "Parameters": {
+        "docId.$": "$.docId",
+        "s3Key.$": "$.s3Key",
+        "filename.$": "$.filename",
+        "fileType.$": "$.fileType"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateStatusError"
+        }
+      ],
+      "Next": "UpdateStatusParsed"
+    },
+    "UpdateStatusParsed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "documentgpt-documents",
+        "Key": {
+          "docId": {"S.$": "$.docId"}
+        },
+        "UpdateExpression": "SET #status = :status, parsedAt = :timestamp, textLength = :textLength",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {"S": "s1.ckpt-07.parsing"},
+          ":timestamp": {"S.$": "$$.State.EnteredTime"},
+          ":textLength": {"N.$": "$.textLength"}
+        }
+      },
+      "ResultPath": "$.dynamoResult",
+      "Next": "IndexDocument"
+    },
+    "IndexDocument": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:995805900737:function:documentgpt-indexer",
+      "Parameters": {
+        "docId.$": "$.docId",
+        "s3Key.$": "$.s3Key",
+        "filename.$": "$.filename"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateStatusError"
+        }
+      ],
+      "Next": "UpdateStatusReady"
+    },
+    "UpdateStatusReady": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "documentgpt-documents",
+        "Key": {
+          "docId": {"S.$": "$.docId"}
+        },
+        "UpdateExpression": "SET #status = :status, indexedAt = :timestamp, chunks = :chunks",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {"S": "s1.ckpt-08.chat"},
+          ":timestamp": {"S.$": "$$.State.EnteredTime"},
+          ":chunks": {"N.$": "$.chunks"}
+        }
+      },
+      "ResultPath": "$.dynamoResult",
+      "End": true
+    },
+    "UpdateStatusError": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "documentgpt-documents",
+        "Key": {
+          "docId": {"S.$": "$.docId"}
+        },
+        "UpdateExpression": "SET #status = :status, errorAt = :timestamp, errorMessage = :error",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {"S": "ERROR"},
+          ":timestamp": {"S.$": "$$.State.EnteredTime"},
+          ":error": {"S.$": "$.Error"}
+        }
+      },
+      "ResultPath": "$.dynamoResult",
+      "End": true
+    }
+  }
+}

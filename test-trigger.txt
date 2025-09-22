@@ -1,0 +1,3 @@
+This is a test document to verify the S3 event trigger and Step Functions workflow.
+The document contains sample text that should trigger the processing pipeline.
+Test timestamp: 2025-09-20 13:05:00

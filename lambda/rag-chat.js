@@ -1,15 +1,6 @@
 const https = require('https');
 const { Client } = require('pg');
 
-const client = new Client({
-    host: process.env.DB_HOST,
-    database: 'postgres',
-    user: 'postgres',
-    password: process.env.DB_PASSWORD,
-    port: 5432,
-    ssl: { rejectUnauthorized: false }
-});
-
 exports.handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': '*',
@@ -29,6 +20,15 @@ exports.handler = async (event) => {
         
         // If docId provided, search for relevant chunks
         if (docId) {
+            const client = new Client({
+                host: process.env.DB_HOST,
+                database: 'postgres',
+                user: 'postgres',
+                password: process.env.DB_PASSWORD,
+                port: 5432,
+                ssl: { rejectUnauthorized: false }
+            });
+            
             await client.connect();
             
             // Get question embedding

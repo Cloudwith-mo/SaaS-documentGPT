@@ -1,0 +1,1 @@
+{"statusCode": 200, "headers": {"Access-Control-Allow-Origin": "https://documentgpt.io", "Access-Control-Allow-Methods": "OPTIONS,POST", "Access-Control-Allow-Headers": "Content-Type,x-api-key,x-user-id", "Vary": "Origin"}, "body": "{\"answer\": \"I can help answer questions about your document (test). Try asking about Microsoft's founding.\", \"docId\": \"test\"}"}

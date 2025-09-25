@@ -21,16 +21,18 @@ def lambda_handler(event, context):
     
     try:
         # Parse request body
-        if isinstance(event.get('body'), str):
-            body = json.loads(event['body'])
+        body_str = event.get('body', '{}')
+        if isinstance(body_str, str):
+            body = json.loads(body_str) if body_str else {}
         else:
-            body = event.get('body', {})
+            body = body_str or {}
         
         filename = body.get('filename', 'document.pdf')
         content_type = body.get('contentType', 'application/pdf')
         
         # Generate unique document ID and key
-        doc_id = f"doc_{int(__import__('time').time() * 1000)}_{uuid.uuid4().hex[:12]}"
+        import time
+        doc_id = f"doc_{int(time.time() * 1000)}_{uuid.uuid4().hex[:12]}"
         file_key = f"{doc_id}/{filename}"
         
         # Generate presigned URL for upload

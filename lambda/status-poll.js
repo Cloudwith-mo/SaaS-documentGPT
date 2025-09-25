@@ -8,8 +8,9 @@ const dynamodb = DynamoDBDocumentClient.from(client);
 exports.handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS'
+        'Access-Control-Allow-Headers': 'Content-Type, x-api-key, x-user-id',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Content-Type': 'application/json'
     };
 
     if (event.httpMethod === 'OPTIONS') {

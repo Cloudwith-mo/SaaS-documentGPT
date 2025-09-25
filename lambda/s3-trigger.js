@@ -17,18 +17,30 @@ exports.handler = async (event) => {
             
             console.log(`Processing S3 object: ${bucket}/${key}`);
             
-            // Parse multi-tenant path: users/{userId}/{docId}/filename
+            // Parse path: {docId}/filename or users/{userId}/{docId}/filename
             const pathParts = key.split('/');
+            let userId, docId, filename;
+            
             if (pathParts.length >= 4 && pathParts[0] === 'users') {
-                const userId = pathParts[1];
-                const docId = pathParts[2];
-                const filename = pathParts.slice(3).join('/');
-                
-                console.log(`Parsed: userId=${userId}, docId=${docId}, filename=${filename}`);
-                
-                // Determine file type
-                const fileExtension = filename.split('.').pop().toLowerCase();
-                const fileType = getFileType(fileExtension);
+                // Multi-tenant path
+                userId = pathParts[1];
+                docId = pathParts[2];
+                filename = pathParts.slice(3).join('/');
+            } else if (pathParts.length >= 2) {
+                // Single-tenant path
+                userId = 'frontend-user';
+                docId = pathParts[0];
+                filename = pathParts.slice(1).join('/');
+            } else {
+                console.log(`Ignoring invalid path: ${key}`);
+                continue;
+            }
+            
+            console.log(`Parsed: userId=${userId}, docId=${docId}, filename=${filename}`);
+            
+            // Determine file type
+            const fileExtension = filename.split('.').pop().toLowerCase();
+            const fileType = getFileType(fileExtension);
                 
                 try {
                     // Create DynamoDB record
@@ -69,9 +81,7 @@ exports.handler = async (event) => {
                     console.error('Error processing S3 event:', error);
                     throw error;
                 }
-            } else {
-                console.log(`Ignoring non-multi-tenant path: ${key}`);
-            }
+
         }
     }
 };

@@ -225,6 +225,11 @@
       </div>
 
       <div class="recent">
+        <h4>UPLOADED DOCS</h4>
+        <div id="uploadedDocs"></div>
+      </div>
+      
+      <div class="recent">
         <h4>RECENT</h4>
         <div class="item" data-open-tab="AI assistant"><span class="avatar"></span> <div><div>AI assistant</div><div class="tiny">2h ago</div></div></div>
         <div class="item" data-open-tab="Q3 review"><span class="avatar"></span> <div><div>Q3 review</div><div class="tiny">2h ago</div></div></div>
@@ -412,6 +417,16 @@
       for (const file of Array.from(files)) {
         const id = 'tab_' + Math.random().toString(36).slice(2, 8);
         
+        // Add tab immediately
+        state.tabs.set(id, { 
+          name: file.name, 
+          url: URL.createObjectURL(file),
+          vectorStoreId: null,
+          uploading: true
+        });
+        addTab(id, file.name);
+        activate(id);
+        
         // Show upload status
         showStatus('Uploading ' + file.name + '...', 'loading');
         
@@ -433,20 +448,36 @@
           const result = await response.json();
           
           if (response.ok) {
-            const url = URL.createObjectURL(file);
-            state.tabs.set(id, { 
-              name: file.name, 
-              url: url,
-              vectorStoreId: result.vector_store_id 
-            });
-            addTab(id, file.name);
-            activate(id);
+            // Update tab with vector store ID
+            const tabData = state.tabs.get(id);
+            tabData.vectorStoreId = result.vector_store_id;
+            tabData.uploading = false;
+            state.tabs.set(id, tabData);
+            
+            // Update current vector store if this is the active tab
+            if (state.active === id) {
+              currentVectorStoreId = result.vector_store_id;
+            }
+            
+            // Update uploaded docs list
+            updateUploadedDocs();
+            
             showStatus('✅ ' + result.message, 'success');
           } else {
             showStatus('❌ ' + result.error, 'error');
+            // Mark upload as failed
+            const tabData = state.tabs.get(id);
+            tabData.uploading = false;
+            tabData.uploadFailed = true;
+            state.tabs.set(id, tabData);
           }
         } catch (error) {
           showStatus('❌ Upload failed: ' + error.message, 'error');
+          // Mark upload as failed
+          const tabData = state.tabs.get(id);
+          tabData.uploading = false;
+          tabData.uploadFailed = true;
+          state.tabs.set(id, tabData);
         }
       }
     }
@@ -479,15 +510,28 @@
 
       const tab = state.tabs.get(id);
       if (tab && tab.url) {
+        // Set current vector store ID for chat
         currentVectorStoreId = tab.vectorStoreId;
+        
         $('#placeholderPage').style.display = 'none';
         $('#embedWrap').style.display = 'block';
-        $('#embedWrap').innerHTML = `<embed id="pdf" type="application/pdf" src="${tab.url}" />`;
+        
+        // Handle different file types
+        if (tab.name.toLowerCase().endsWith('.pdf')) {
+          $('#embedWrap').innerHTML = `<embed id="pdf" type="application/pdf" src="${tab.url}" />`;
+        } else {
+          // For text files, show content in a text viewer
+          $('#embedWrap').innerHTML = `<iframe src="${tab.url}" style="width:100%;height:100%;border:none;background:white;border-radius:8px;"></iframe>`;
+        }
         applyZoom();
+        
+        // Update chat context message
+        updateChatContext(tab.name, tab.uploading, tab.uploadFailed);
       } else {
         currentVectorStoreId = null;
         $('#embedWrap').style.display = 'none';
         $('#placeholderPage').style.display = 'grid';
+        updateChatContext(null);
       }
     }
 
@@ -507,6 +551,9 @@
           const first = $('#tabs .tab');
           first ? activate(first.dataset.id) : activate('welcome');
         }
+        
+        // Update uploaded docs list
+        updateUploadedDocs();
       } else {
         activate(id);
       }
@@ -522,6 +569,50 @@
     // Preload welcome tab
     state.tabs.set('welcome', { name: 'Welcome', url: null, vectorStoreId: null });
     activate('welcome');
+    
+    function updateChatContext(fileName, uploading, failed) {
+      const contextMsg = $('#msgs .msg.bot:first-child');
+      if (fileName) {
+        if (uploading) {
+          contextMsg.textContent = `Uploading "${fileName}"... Please wait for processing to complete before chatting.`;
+        } else if (failed) {
+          contextMsg.textContent = `Failed to upload "${fileName}". Please try uploading again.`;
+        } else {
+          contextMsg.textContent = `Now viewing "${fileName}". Ask me anything about this document!`;
+        }
+      } else {
+        contextMsg.textContent = 'Upload a document to start analyzing it. I can summarize, extract key information, and answer questions about your documents.';
+      }
+    }
+    
+    function updateUploadedDocs() {
+      const container = $('#uploadedDocs');
+      container.innerHTML = '';
+      
+      // Get all uploaded documents (excluding welcome tab)
+      const uploadedTabs = Array.from(state.tabs.entries())
+        .filter(([id, tab]) => id !== 'welcome' && tab.vectorStoreId)
+        .sort(([,a], [,b]) => a.name.localeCompare(b.name));
+      
+      if (uploadedTabs.length === 0) {
+        container.innerHTML = '<div class="tiny" style="padding:.5rem;color:var(--muted);text-align:center">No documents uploaded yet</div>';
+        return;
+      }
+      
+      uploadedTabs.forEach(([id, tab]) => {
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.innerHTML = `
+          <span style="font-size:16px">📄</span>
+          <div>
+            <div style="font-size:13px;font-weight:500">${tab.name}</div>
+            <div class="tiny">Ready to chat</div>
+          </div>
+        `;
+        item.addEventListener('click', () => activate(id));
+        container.appendChild(item);
+      });
+    }
 
     // Zoom controls
     function applyZoom(){
@@ -555,8 +646,13 @@
       $('#composer').value = '';
       pushMsg(v, 'me');
       
-      if (!currentVectorStoreId) {
-        pushMsg('Please upload a document first to start chatting about it.', 'bot');
+      const activeTab = state.tabs.get(state.active);
+      if (!currentVectorStoreId || !activeTab || activeTab.uploading) {
+        if (activeTab && activeTab.uploading) {
+          pushMsg('Document is still uploading. Please wait for it to finish processing.', 'bot');
+        } else {
+          pushMsg('Please upload a document first or switch to a tab with an uploaded document.', 'bot');
+        }
         return;
       }
 
@@ -567,11 +663,14 @@
       loadingMsg.scrollIntoView({behavior:'smooth', block:'end'});
 
       try {
+        const activeTab = state.tabs.get(state.active);
+        const contextualMessage = `[DOCUMENT CONTEXT: Currently viewing "${activeTab.name}". Prioritize information from this document, but you can also provide general knowledge if relevant.] ${v}`;
+        
         const response = await fetch(`${API_BASE}/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: [{ role: 'user', content: v }],
+            messages: [{ role: 'user', content: contextualMessage }],
             vector_store_id: currentVectorStoreId,
             user_email: 'user@documentgpt.io'
           })

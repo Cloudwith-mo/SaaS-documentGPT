@@ -1,603 +1,650 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="auto">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocumentGPT - Advanced UI</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-    <script src="https://unpkg.com/marked@9.1.6/marked.min.js"></script>
-    <script src="https://unpkg.com/dompurify@3.0.5/dist/purify.min.js"></script>
-    <style>
-        .markdown-body { line-height: 1.6; }
-        .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: .75rem 0 .4rem; font-weight: 600; }
-        .markdown-body p { margin: .5rem 0; }
-        .markdown-body ul, .markdown-body ol { margin: .5rem 0 .5rem 1.25rem; }
-        .markdown-body code { background: rgba(125,125,125,.15); padding: 2px 4px; border-radius: 4px; font-family: monospace; }
-        .markdown-body pre { background: #0f172a; color: #e5e7eb; padding: 10px 12px; border-radius: 8px; overflow: auto; margin: .5rem 0; }
-        .markdown-body pre code { background: transparent; }
-        .markdown-body table { border-collapse: collapse; margin: .5rem 0; }
-        .markdown-body th, .markdown-body td { border: 1px solid rgba(120,120,120,.2); padding: 6px 8px; }
-        .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 1rem; margin: .5rem 0; color: #6b7280; }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DocumentGPT · AI Document Assistant</title>
+  <style>
+    /* ----------------------
+       Design tokens
+       ---------------------- */
+    :root {
+      --bg: #f7fafc;                /* page background */
+      --panel: #ffffff;              /* cards/panels */
+      --soft: #f1f5f9;               /* panel hover / subtle fills */
+      --border: #e2e8f0;             /* borders */
+      --text: #0f172a;               /* primary text */
+      --muted: #475569;              /* secondary text */
+      --accent-1: #22d3ee;           /* cyan */
+      --accent-2: #3b82f6;           /* blue */
+      --accent-3: #7c3aed;           /* violet */
+      --ring: rgba(59,130,246,.35);
+      --shadow-1: 0 8px 30px rgba(2, 8, 23, .06);
+      --shadow-2: 0 20px 40px rgba(2, 8, 23, .10);
+      --radius: 14px;
+
+      /* Layout widths (JS updates these) */
+      --left: 280px;   /* sidebar left */
+      --right: 380px;  /* sidebar right */
+    }
+    
+    /* Dark mode */
+    [data-theme="dark"] {
+      --bg: #0b1020;
+      --panel: #0f172a;
+      --soft: #111a2e;
+      --border: #18223a;
+      --text: #e6ebff;
+      --muted: #a8b2d1;
+      --ring: rgba(56,189,248,.35);
+      --shadow-1: 0 10px 40px rgba(2, 8, 23, .65);
+      --shadow-2: 0 25px 55px rgba(2, 8, 23, .75);
+    }
+
+    /* ----------------------
+       Base + utilities
+       ---------------------- */
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text);
+      background: radial-gradient(1200px 600px at 30% -10%, rgba(34,211,238,.08), transparent 60%),
+                  radial-gradient(1200px 600px at 80% -20%, rgba(59,130,246,.08), transparent 65%),
+                  var(--bg);
+      -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    }
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+    .pill { display:inline-flex; align-items:center; gap:.5rem; padding:.45rem .7rem; border-radius:999px; background:var(--soft); border:1px solid var(--border); color:var(--muted); }
+    .chip { display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .65rem; border-radius:999px; background:linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.35)); border:1px solid var(--border); color:var(--muted); backdrop-filter: blur(8px); cursor:pointer; transition: .2s ease; }
+    .chip:hover { transform: translateY(-1px); box-shadow: var(--shadow-1); }
+
+    button { font: inherit; color: inherit; background: transparent; border: 1px solid var(--border); border-radius: 12px; padding: .55rem .75rem; cursor: pointer; transition: .2s ease; }
+    button:hover { box-shadow: var(--shadow-1); background: var(--soft); }
+    button.ghost { border-color: transparent; background: transparent; }
+    button.primary { border-color: transparent; color: #0b1325; background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); }
+    button.icon { width: 36px; height: 36px; display: inline-grid; place-items: center; padding: 0; }
+    button.flat { border-color: var(--border); background: var(--panel); }
+    .btnbar { display:flex; gap:.5rem; align-items:center; }
+
+    .tag { padding:.25rem .5rem; border:1px solid var(--border); border-radius:999px; color:var(--muted); background:var(--soft); }
+
+    .blur-card { background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.35)); border:1px solid var(--border); backdrop-filter: blur(10px); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+
+    .divider { height:1px; background:var(--border); margin:.75rem 0; }
+    .tiny { font-size: 12px; color: var(--muted); }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ----------------------
+       Header
+       ---------------------- */
+    .header { position: sticky; top: 0; z-index: 40; height: 56px; display:flex; align-items:center; gap: 12px; justify-content: space-between; padding: 0 .75rem; background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.5)), var(--panel); border-bottom: 1px solid var(--border); backdrop-filter: saturate(120%) blur(10px); }
+    .brand { display:flex; align-items:center; gap:.6rem; font-weight: 600; }
+    .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); box-shadow: 0 0 0 3px rgba(34,211,238,.2); }
+    .header .search { flex: 1; display:flex; align-items:center; gap:.6rem; max-width: 560px; margin: 0 10px; }
+    .search input { width: 100%; padding: .55rem .8rem; border:1px solid var(--border); border-radius: 12px; background: var(--soft); color: var(--text); outline: none; }
+
+    /* ----------------------
+       App layout
+       ---------------------- */
+    .app { height: calc(100dvh - 56px); display: grid; grid-template-columns: var(--left) 10px 1fr 10px var(--right); gap: 0; }
+    .pane { background: var(--panel); border-right: 1px solid var(--border); overflow: hidden; box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+    .pane.right { border-left: 1px solid var(--border); border-right: none; }
+
+    /* Resizers */
+    .resizer { position: relative; cursor: col-resize; display: grid; place-items: center; }
+    .resizer::after { content:''; width: 3px; height: 32px; border-radius: 999px; background: linear-gradient(180deg, var(--accent-1), var(--accent-2)); opacity: .6; }
+
+    /* Left sidebar */
+    .left { display:flex; flex-direction:column; height: 100%; }
+    .left .section { padding: .8rem; }
+    .uploader { display:grid; grid-template-columns: 1fr auto; gap:.5rem; }
+    .uploader .file { padding:.55rem .7rem; border:1px dashed var(--border); border-radius: 12px; background: var(--soft); }
+
+    .recent { padding: .4rem .8rem .8rem; overflow:auto; }
+    .recent h4 { margin:.4rem 0 .35rem; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .4px; }
+    .recent .item { display:flex; align-items:center; gap:.6rem; padding:.45rem .5rem; border-radius: 10px; cursor:pointer; color: var(--muted); }
+    .recent .item:hover { background: var(--soft); color: var(--text); }
+    .avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(45deg, var(--accent-1), var(--accent-2)); box-shadow: inset 0 0 0 2px #fff3; }
+
+    /* Center / document area */
+    .center { display:flex; flex-direction:column; height:100%; }
+    .topbar { display:flex; align-items:center; justify-content: space-between; gap:.75rem; padding: .5rem .6rem; border-bottom:1px solid var(--border); background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.5)), var(--panel); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 10; }
+
+    .tabs { display:flex; align-items:center; gap:.35rem; overflow:auto hidden; scrollbar-width: none; }
+    .tab { display:inline-flex; align-items:center; gap:.5rem; border-radius: 999px; padding:.45rem .75rem; border:1px solid var(--border); background: var(--soft); color: var(--muted); white-space: nowrap; }
+    .tab.active { background: linear-gradient(90deg, rgba(34,211,238,.18), rgba(59,130,246,.18)); color: var(--text); border-color: transparent; }
+    .tab .x { opacity:.7; }
+
+    .tools { display:flex; align-items:center; gap:.5rem; }
+    .tools .kbd { border:1px solid var(--border); background: var(--soft); padding: .2rem .4rem; border-radius: 8px; font-size: 12px; color: var(--muted); }
+
+    .viewer { position: relative; flex: 1; display:grid; place-items:center; overflow:auto; background: repeating-linear-gradient(45deg, var(--soft), var(--soft) 8px, transparent 8px, transparent 16px); }
+    .page { width:min(900px, 95%); height: min(80dvh, 1050px); background:white; border-radius: 10px; box-shadow: var(--shadow-2); position: relative; overflow:hidden; display:grid; place-items:center; }
+    [data-theme="dark"] .page { background: #0b0f1e; }
+    .drop-hint { position: absolute; inset: 0; display:grid; place-items:center; pointer-events:none; color:var(--muted); }
+
+    .embed-wrap { width: min(1000px, 95%); height: calc(100% - 24px); transform-origin: top center; }
+    .embed-wrap embed { width: 100%; height: 100%; border: none; background: white; border-radius: 8px; box-shadow: var(--shadow-2); }
+
+    /* Right / chat */
+    .right { display:flex; flex-direction:column; height:100%; }
+    .right .bar { padding:.55rem .6rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content: space-between; gap:.5rem; }
+    .right .hints { padding:.6rem; display:flex; flex-wrap: wrap; gap:.45rem; border-bottom:1px solid var(--border); }
+
+    .msgs { flex:1; overflow:auto; padding:.75rem; display:flex; flex-direction:column; gap:.6rem; }
+    .msg { max-width: 88%; padding:.6rem .75rem; border-radius: 14px; box-shadow: var(--shadow-1); }
+    .msg.bot { align-self:flex-start; background: var(--panel); border:1px solid var(--border); }
+    .msg.me { align-self:flex-end; background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); color:#0b1325; border: 1px solid transparent; }
+
+    .composer { padding:.6rem; border-top:1px solid var(--border); display:flex; gap:.5rem; align-items:center; background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.5)), var(--panel); backdrop-filter: blur(8px); }
+    .composer .box { position: relative; flex:1; }
+    .composer textarea { width:100%; min-height:42px; max-height: 180px; padding:.65rem .85rem; border:1px solid var(--border); background: var(--soft); color:var(--text); border-radius: 12px; resize: none; outline: none; }
+
+    /* Command palette */
+    .palette { position: fixed; inset: 0; display:none; place-items:center; background: rgba(2, 6, 23, .35); backdrop-filter: blur(4px); z-index: 100; }
+    .palette.show { display:grid; }
+    .palette .panel { width: min(740px, 95vw); background: var(--panel); border:1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-2); overflow:hidden; }
+    .palette .panel header { padding:.75rem .9rem; border-bottom:1px solid var(--border); display:flex; gap:.6rem; align-items:center; }
+    .palette input { width:100%; padding:.6rem .7rem; border:1px solid var(--border); background: var(--soft); border-radius: 10px; outline:none; }
+    .palette .items { max-height: 52vh; overflow:auto; }
+    .palette .row { padding:.6rem .9rem; display:flex; align-items:center; gap:.6rem; cursor:pointer; }
+    .palette .row:hover { background: var(--soft); }
+
+    /* Zen mode */
+    [data-zen="on"] .left, [data-zen="on"] .right, [data-zen="on"] .resizer { display:none; }
+    [data-zen="on"] .app { grid-template-columns: 1fr; }
+
+    /* Responsive */
+    @media (max-width: 1080px) {
+      :root{ --right: 320px; --left: 240px; }
+    }
+    @media (max-width: 920px) {
+      .app { grid-template-columns: var(--left) 8px 1fr; }
+      .right, .resizer:last-of-type { display: none; }
+    }
+    @media (max-width: 720px) {
+      .app { grid-template-columns: 1fr; }
+      .left, .resizer { display:none; }
+      .header .search { display:none; }
+    }
+      /* Focus mode: center document + right chat */
+    [data-focus="on"] .header { display:flex; }
+    [data-focus="on"] .left, [data-focus="on"] .resizer, [data-focus="on"] .center .topbar { display:none; }
+    [data-focus="on"] .app { grid-template-columns: 1fr var(--right); }
+    [data-focus="on"] .right { display:flex !important; }
+    @media (max-width: 920px) {
+      [data-focus="on"] .app { grid-template-columns: 1fr minmax(280px, 40vw); }
+      [data-focus="on"] .right { display:flex !important; }
+    }
+
+    .status { margin: .5rem 0; padding: .5rem .7rem; border-radius: 10px; font-size: 13px; }
+    .status.success { background: rgba(34, 197, 94, 0.1); color: #16a34a; border: 1px solid rgba(34, 197, 94, 0.2); }
+    .status.error { background: rgba(239, 68, 68, 0.1); color: #dc2626; border: 1px solid rgba(239, 68, 68, 0.2); }
+    .status.loading { background: rgba(245, 158, 11, 0.1); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.2); }
+  </style>
 </head>
 <body>
-    <div id="root"></div>
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">
+      <span class="dot" aria-hidden="true"></span>
+      <span>DocumentGPT <span class="tiny">v5</span></span>
+    </div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
-        const API_BASE = 'https://i1dy8i3692.execute-api.us-east-1.amazonaws.com/prod';
+    <div class="search" role="search">
+      <input id="globalSearch" placeholder="Ctrl/⌘ K – command palette · Search docs & actions" />
+    </div>
 
-        // Configure PDF.js worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+    <div class="btnbar">
+      <button class="icon ghost" id="zenBtn" title="Focus mode (doc + chat)">
+        <!-- Maximize icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9V5a2 2 0 0 1 2-2h4"/><path d="M21 9V5a2 2 0 0 0-2-2h-4"/><path d="M3 15v4a2 2 0 0 0 2 2h4"/><path d="M21 15v4a2 2 0 0 1-2 2h-4"/></svg>
+      </button>
+      <button class="icon ghost" id="themeBtn" title="Toggle theme">
+        <!-- sun/moon -->
+        <svg id="sunIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M20 12h2M2 12H4m14.14 5.66 1.41 1.41M4.45 4.45 5.86 5.86m0 12.28-1.41 1.41M19.55 4.45 18.14 5.86"/></svg>
+      </button>
+    </div>
+  </div>
 
-        // API functions with streaming and meta support
-        async function uploadFile(file) {
-            const fd = new FormData();
-            fd.append('file', file);
-            const res = await fetch(`${API_BASE}/upload`, {
-                method: 'POST',
-                body: fd
+  <!-- App Grid -->
+  <div class="app" id="appGrid">
+    <!-- Left Pane -->
+    <aside class="pane left">
+      <div class="section" style="border-bottom:1px solid var(--border)">
+        <div class="uploader" aria-label="Upload">
+          <label class="file" for="fileInput">Drop or choose files</label>
+          <input id="fileInput" class="sr-only" type="file" accept="application/pdf,.txt,.md,.doc,.docx,.json,.csv" multiple>
+          <button id="uploadBtn" class="primary">Upload</button>
+        </div>
+        <div id="uploadStatus"></div>
+      </div>
+
+      <div class="recent">
+        <h4>RECENT</h4>
+        <div class="item" data-open-tab="AI assistant"><span class="avatar"></span> <div><div>AI assistant</div><div class="tiny">2h ago</div></div></div>
+        <div class="item" data-open-tab="Q3 review"><span class="avatar"></span> <div><div>Q3 review</div><div class="tiny">2h ago</div></div></div>
+        <div class="item" data-open-tab="Contract QA"><span class="avatar"></span> <div><div>Contract QA</div><div class="tiny">2h ago</div></div></div>
+      </div>
+    </aside>
+
+    <!-- Resizer L -->
+    <div class="resizer" data-side="left" title="Drag to resize"></div>
+
+    <!-- Center Pane -->
+    <section class="pane center">
+      <div class="topbar">
+        <div class="tabs" id="tabs">
+          <button class="tab active" data-id="welcome"><span>Welcome</span></button>
+          <button class="tab ghost" id="addTab" title="Open new tab">＋</button>
+        </div>
+
+        <div class="tools">
+          <div class="btnbar" role="toolbar" aria-label="Zoom">
+            <button class="icon flat" id="zoomOut" title="Zoom out">–</button>
+            <span class="kbd" id="zoomLabel">110%</span>
+            <button class="icon flat" id="zoomIn" title="Zoom in">＋</button>
+          </div>
+          <span class="tiny">Page <b id="pageNow">1</b> / <b id="pageTotal">1</b></span>
+          <input id="findInDoc" placeholder="Find text in this page" style="padding:.45rem .6rem; border-radius:10px; border:1px solid var(--border); background:var(--soft); width: 220px;">
+          <button class="ghost" id="shareBtn">Share</button>
+        </div>
+      </div>
+
+      <div class="viewer" id="viewer" tabindex="0">
+        <div class="drop-hint" id="dropHint">Drop a document to view (upload begins automatically)</div>
+        <div class="embed-wrap" id="embedWrap" style="display:none"></div>
+        <div class="page" id="placeholderPage" aria-label="Document page">
+          <div style="text-align:center">
+            <div class="tiny" style="letter-spacing:.04em;color:var(--muted);margin-bottom:.25rem">Preview</div>
+            <div style="font-weight:700;font-size:20px">Your document will appear here</div>
+            <div class="tiny" style="margin-top:.5rem">Drag & drop a PDF or click <b>Upload</b> · Use <b>Ctrl/⌘ + K</b> for commands</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Resizer R -->
+    <div class="resizer" data-side="right" title="Drag to resize"></div>
+
+    <!-- Right Pane (Chat) -->
+    <aside class="pane right">
+      <div class="bar">
+        <div class="btnbar">
+          <span class="pill"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 4v7c0 3.6-3.6 6-7 7-3.4-1-7-3.4-7-7V7l7-4z"/></svg> GPT‑4o</span>
+          <span class="pill">High quality</span>
+        </div>
+        <div class="btnbar">
+          <button class="ghost" id="clearChat">Clear</button>
+        </div>
+      </div>
+
+      <div class="hints">
+        <div class="chip" data-hint="Summarize this document">Summarize the document</div>
+        <div class="chip" data-hint="What are the key points?">What are the key points?</div>
+        <div class="chip" data-hint="List all dates and currency">Any important dates or numbers?</div>
+        <div class="chip" data-hint="Extract totals with currency and page numbers">List all totals with currency</div>
+      </div>
+
+      <div class="msgs" id="msgs">
+        <div class="msg bot">Upload a document to start analyzing it. I can summarize, extract key information, and answer questions about your documents.</div>
+      </div>
+
+      <div class="composer">
+        <button class="icon" id="attachBtn" title="Attach a file"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21.44 11.05 12 20.5a6 6 0 1 1-8.49-8.49L13.5 2.5a4 4 0 1 1 5.66 5.66L7.75 19.56"/></svg></button>
+        <div class="box"><textarea id="composer" placeholder="Ask anything…"></textarea></div>
+        <button class="icon primary" id="sendBtn" title="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0b1325" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg></button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Command palette -->
+  <div class="palette" id="palette" aria-hidden="true">
+    <div class="panel">
+      <header>
+        <span class="pill" style="background:linear-gradient(90deg, var(--accent-1), var(--accent-2)); color:#0b1325; border-color:transparent">⌘K</span>
+        <input id="paletteInput" placeholder="Search commands (upload, summarize, key points, toggle theme, open settings…)" />
+      </header>
+      <div class="items" id="paletteItems">
+        <div class="row" data-cmd="upload">Upload document…</div>
+        <div class="row" data-cmd="summarize">Summarize current tab</div>
+        <div class="row" data-cmd="keypoints">Extract key points</div>
+        <div class="row" data-cmd="numbers">Find dates & currency</div>
+        <div class="row" data-cmd="theme">Toggle theme</div>
+        <div class="row" data-cmd="zen">Toggle focus mode (doc + chat)</div>
+        <div class="row" data-cmd="newtab">Open new empty tab</div>
+        <div class="row" data-cmd="share">Share current tab</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Utilities
+    const $ = (q, el=document) => el.querySelector(q);
+    const $$ = (q, el=document) => Array.from(el.querySelectorAll(q));
+
+    // DocumentGPT API
+    const API_BASE = 'https://i1dy8i3692.execute-api.us-east-1.amazonaws.com/prod';
+    let currentVectorStoreId = null;
+
+    const state = {
+      theme: localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
+      left: localStorage.getItem('left') || getComputedStyle(document.documentElement).getPropertyValue('--left'),
+      right: localStorage.getItem('right') || getComputedStyle(document.documentElement).getPropertyValue('--right'),
+      zoom: 1.1,
+      tabs: new Map(), // id -> {name, url, vectorStoreId}
+      active: null
+    };
+
+    function applyTheme() {
+      document.documentElement.setAttribute('data-theme', state.theme);
+    }
+
+    function setCols(left, right) {
+      document.documentElement.style.setProperty('--left', left);
+      document.documentElement.style.setProperty('--right', right);
+      localStorage.setItem('left', left);
+      localStorage.setItem('right', right);
+    }
+
+    applyTheme();
+    setCols(state.left, state.right);
+
+    // Theme & zen
+    $('#themeBtn').addEventListener('click', () => {
+      state.theme = state.theme === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('theme', state.theme); applyTheme();
+    });
+    $('#zenBtn').addEventListener('click', () => {
+      const on = document.body.getAttribute('data-focus') === 'on' ? 'off' : 'on';
+      document.body.setAttribute('data-focus', on);
+    });
+
+    // Resizers
+    $$('.resizer').forEach(r => {
+      r.addEventListener('pointerdown', e => {
+        r.setPointerCapture(e.pointerId);
+        const side = r.dataset.side;
+        const startX = e.clientX;
+        const rect = $('#appGrid').getBoundingClientRect();
+        const leftStart = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--left'));
+        const rightStart = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--right'));
+        const onMove = ev => {
+          const dx = ev.clientX - startX;
+          if (side === 'left') {
+            const newLeft = Math.min(Math.max(180, leftStart + dx), rect.width - 420); // clamp
+            setCols(newLeft + 'px', getComputedStyle(document.documentElement).getPropertyValue('--right'));
+          } else {
+            const newRight = Math.min(Math.max(280, rightStart - dx), rect.width - 420);
+            setCols(getComputedStyle(document.documentElement).getPropertyValue('--left'), newRight + 'px');
+          }
+        };
+        const onUp = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp, { once: true });
+      });
+    });
+
+    // Upload
+    const fileInput = $('#fileInput');
+    $('#uploadBtn').addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', e => {
+      if (!e.target.files) return;
+      handleFiles(e.target.files);
+      e.target.value = '';
+    });
+
+    // Drag & drop
+    const viewer = $('#viewer');
+    ['dragenter','dragover'].forEach(ev => viewer.addEventListener(ev, e => { e.preventDefault(); $('#dropHint').textContent = 'Release to upload…'; }));
+    ;['dragleave','drop'].forEach(ev => viewer.addEventListener(ev, e => { e.preventDefault(); $('#dropHint').textContent = 'Drop a document to view (upload begins automatically)'; }));
+    viewer.addEventListener('drop', e => { handleFiles(e.dataTransfer.files); });
+
+    async function handleFiles(files) {
+      for (const file of Array.from(files)) {
+        const id = 'tab_' + Math.random().toString(36).slice(2, 8);
+        
+        // Show upload status
+        showStatus('Uploading ' + file.name + '...', 'loading');
+        
+        try {
+          // Convert file to base64
+          const base64Content = await fileToBase64(file);
+          
+          // Upload to DocumentGPT API
+          const response = await fetch(`${API_BASE}/upload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              file_content: base64Content.split(',')[1],
+              user_id: 'web-user'
+            })
+          });
+
+          const result = await response.json();
+          
+          if (response.ok) {
+            const url = URL.createObjectURL(file);
+            state.tabs.set(id, { 
+              name: file.name, 
+              url: url,
+              vectorStoreId: result.vector_store_id 
             });
-            if (!res.ok) throw new Error(await res.text());
-            const data = await res.json();
-            return {
-                docId: data.vector_store_id || data.docId,
-                fileUrl: data.fileUrl || '#',
-                fileName: data.fileName || file.name,
-                pageCount: data.pageCount
-            };
+            addTab(id, file.name);
+            activate(id);
+            showStatus('✅ ' + result.message, 'success');
+          } else {
+            showStatus('❌ ' + result.error, 'error');
+          }
+        } catch (error) {
+          showStatus('❌ Upload failed: ' + error.message, 'error');
         }
+      }
+    }
 
-        async function chatWithDoc({ docId, message, meta, onToken, onDone, signal }) {
-            const res = await fetch(`${API_BASE}/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-                body: JSON.stringify({
-                    messages: [{ role: 'user', content: message }],
-                    vector_store_id: docId,
-                    meta,
-                    stream: true
-                }),
-                signal
-            });
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+      });
+    }
 
-            const ct = res.headers.get('content-type') || '';
-            if (!ct.includes('text/event-stream')) {
-                if (!res.ok) throw new Error(await res.text());
-                const json = await res.json();
-                const answer = json.response || json.answer || '';
-                onToken?.(answer);
-                onDone?.();
-                return { mode: 'json', answer };
-            }
+    function showStatus(message, type) {
+      const statusEl = $('#uploadStatus');
+      statusEl.innerHTML = `<div class="status ${type}">${message}</div>`;
+      setTimeout(() => statusEl.innerHTML = '', 3000);
+    }
 
-            // Streaming fallback - simulate for now
-            const json = await res.json();
-            const answer = json.response || json.answer || '';
-            
-            // Simulate streaming by chunking the response
-            const words = answer.split(' ');
-            let current = '';
-            for (let i = 0; i < words.length; i++) {
-                current += (i > 0 ? ' ' : '') + words[i];
-                onToken?.(current);
-                await new Promise(resolve => setTimeout(resolve, 50));
-            }
-            onDone?.();
-            
-            return { mode: 'stream', abort: () => {} };
+    // Tabs
+    function addTab(id, name) {
+      const b = document.createElement('button');
+      b.className = 'tab'; b.dataset.id = id; b.innerHTML = `<span>${name}</span><span class="x" title="Close">✕</span>`;
+      $('#tabs').insertBefore(b, $('#addTab'));
+    }
+
+    function activate(id) {
+      state.active = id;
+      $$('#tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.id === id));
+
+      const tab = state.tabs.get(id);
+      if (tab && tab.url) {
+        currentVectorStoreId = tab.vectorStoreId;
+        $('#placeholderPage').style.display = 'none';
+        $('#embedWrap').style.display = 'block';
+        $('#embedWrap').innerHTML = `<embed id="pdf" type="application/pdf" src="${tab.url}" />`;
+        applyZoom();
+      } else {
+        currentVectorStoreId = null;
+        $('#embedWrap').style.display = 'none';
+        $('#placeholderPage').style.display = 'grid';
+      }
+    }
+
+    $('#tabs').addEventListener('click', e => {
+      const t = e.target.closest('.tab');
+      if (!t) return;
+      const isClose = e.target.classList.contains('x');
+      const id = t.dataset.id;
+      if (isClose) {
+        // Close tab
+        const wasActive = t.classList.contains('active');
+        t.remove();
+        const info = state.tabs.get(id);
+        if (info && info.url) URL.revokeObjectURL(info.url);
+        state.tabs.delete(id);
+        if (wasActive) {
+          const first = $('#tabs .tab');
+          first ? activate(first.dataset.id) : activate('welcome');
         }
+      } else {
+        activate(id);
+      }
+    });
 
-        // Streaming accumulator
-        function makeAccumulator(onUpdate) {
-            let text = '';
-            return {
-                push: (chunk) => {
-                    text = chunk; // For our simple implementation, just replace
-                    onUpdate(text);
-                },
-                value: () => text
-            };
+    $('#addTab').addEventListener('click', () => {
+      const id = 'empty_' + Math.random().toString(36).slice(2,6);
+      state.tabs.set(id, { name: 'Untitled', url: null, vectorStoreId: null });
+      addTab(id, 'Untitled');
+      activate(id);
+    });
+
+    // Preload welcome tab
+    state.tabs.set('welcome', { name: 'Welcome', url: null, vectorStoreId: null });
+    activate('welcome');
+
+    // Zoom controls
+    function applyZoom(){
+      const wrap = $('#embedWrap');
+      if (!wrap) return;
+      wrap.style.transform = `scale(${state.zoom})`;
+      wrap.style.margin = `${(state.zoom-1)*40}px auto`;
+      $('#zoomLabel').textContent = Math.round(state.zoom*100) + '%';
+    }
+    $('#zoomIn').addEventListener('click', ()=>{ state.zoom = Math.min(2, state.zoom + 0.1); applyZoom(); });
+    $('#zoomOut').addEventListener('click', ()=>{ state.zoom = Math.max(0.6, state.zoom - 0.1); applyZoom(); });
+
+    // Find (note: real PDF text search requires PDF.js; here we simulate a UX hook)
+    $('#findInDoc').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ toast('Search: simulated in mock. Hook your PDF engine here.'); }});
+
+    // Right pane: suggestions & chat
+    $$('.chip').forEach(c => c.addEventListener('click', ()=>{ $('#composer').value = c.dataset.hint; $('#composer').focus(); }));
+
+    function pushMsg(text, who='me'){
+      const d = document.createElement('div');
+      d.className = 'msg ' + (who==='me'?'me':'bot');
+      d.textContent = text;
+      $('#msgs').appendChild(d);
+      d.scrollIntoView({behavior:'smooth', block:'end'});
+    }
+
+    async function handleSend(){
+      const v = $('#composer').value.trim(); 
+      if(!v) return;
+      
+      $('#composer').value = '';
+      pushMsg(v, 'me');
+      
+      if (!currentVectorStoreId) {
+        pushMsg('Please upload a document first to start chatting about it.', 'bot');
+        return;
+      }
+
+      const loadingMsg = document.createElement('div');
+      loadingMsg.className = 'msg bot';
+      loadingMsg.textContent = '🤔 Processing...';
+      $('#msgs').appendChild(loadingMsg);
+      loadingMsg.scrollIntoView({behavior:'smooth', block:'end'});
+
+      try {
+        const response = await fetch(`${API_BASE}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: v }],
+            vector_store_id: currentVectorStoreId,
+            user_email: 'user@documentgpt.io'
+          })
+        });
+
+        const result = await response.json();
+        loadingMsg.remove();
+        
+        if (response.ok) {
+          pushMsg(result.response, 'bot');
+        } else {
+          pushMsg('❌ Error: ' + result.error, 'bot');
         }
+      } catch (error) {
+        loadingMsg.remove();
+        pushMsg('❌ Chat failed: ' + error.message, 'bot');
+      }
+    }
 
-        // Markdown component
-        function Markdown({ text }) {
-            const html = useMemo(() => {
-                if (!text) return '';
-                const raw = marked.parse(text);
-                return DOMPurify.sanitize(raw);
-            }, [text]);
+    $('#sendBtn').addEventListener('click', handleSend);
+    $('#composer').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); handleSend(); }});
 
-            return <div className="markdown-body" dangerouslySetInnerHTML={{ __html: html }} />;
-        }
+    // Palette
+    const palette = $('#palette');
+    const openPalette = () => { palette.classList.add('show'); $('#paletteInput').focus(); }
+    const closePalette = () => { palette.classList.remove('show'); }
 
-        // Action definitions
-        const ACTIONS = [
-            {
-                id: 'email_summary_gmail',
-                label: 'Email summary (Gmail)',
-                prompt: 'Summarize the document in ~120 words and draft a Gmail email with a clear subject and bullet points.',
-                meta: { flowId: 'doc_summary_outbound', action: 'email_summary', provider: 'gmail' }
-            },
-            {
-                id: 'email_summary_outlook',
-                label: 'Email summary (Outlook)',
-                prompt: 'Summarize the document in ~120 words and draft an Outlook email with a clear subject and bullet points.',
-                meta: { flowId: 'doc_summary_outbound', action: 'email_summary', provider: 'outlook' }
-            },
-            {
-                id: 'post_slack',
-                label: 'Post to Slack',
-                prompt: 'Summarize the document into 5–8 bullet points suitable for Slack, include key dates/numbers.',
-                meta: { flowId: 'doc_summary_outbound', action: 'slack_post' }
-            },
-            {
-                id: 'post_teams',
-                label: 'Post to Teams',
-                prompt: 'Summarize the document into 5–8 bullet points suitable for Microsoft Teams.',
-                meta: { flowId: 'doc_summary_outbound', action: 'teams_post' }
-            },
-            {
-                id: 'export_gdoc',
-                label: 'Export Google Doc',
-                prompt: 'Create a clean Google Doc containing a well-structured summary with headings and a key-points list.',
-                meta: { flowId: 'doc_summary_outbound', action: 'docs_export', provider: 'google' }
-            },
-            {
-                id: 'export_word',
-                label: 'Export Word (.docx)',
-                prompt: 'Export a .docx with a well-structured summary and key sections preserved.',
-                meta: { flowId: 'doc_summary_outbound', action: 'docs_export', provider: 'word' }
-            },
-            {
-                id: 'translate_gmail',
-                label: 'Translate + email (Gmail)',
-                prompt: 'Translate the document to Spanish and draft a Gmail email with the translation.',
-                meta: { flowId: 'doc_translate_outbound', action: 'email_translation', provider: 'gmail' }
-            },
-            {
-                id: 'linkedin_draft',
-                label: 'LinkedIn post draft',
-                prompt: 'Write a LinkedIn-ready post (max 1300 chars) summarizing the document insights with a strong hook.',
-                meta: { flowId: 'doc_summary_outbound', action: 'linkedin_draft' }
-            }
-        ];
+    $('#globalSearch').addEventListener('focus', openPalette);
+    document.addEventListener('keydown', e=>{
+      const k = (e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='k';
+      if(k){ e.preventDefault(); openPalette(); }
+      if(e.key==='Escape') closePalette();
+    });
+    palette.addEventListener('click', e=>{ if(e.target===palette) closePalette(); });
+    $('#paletteItems').addEventListener('click', e=>{
+      const row = e.target.closest('.row'); if(!row) return; const cmd=row.dataset.cmd; closePalette();
+      switch(cmd){
+        case 'upload': fileInput.click(); break;
+        case 'summarize': $('#composer').value = 'Summarize this document'; handleSend(); break;
+        case 'keypoints': $('#composer').value = 'What are the key points?'; handleSend(); break;
+        case 'numbers': $('#composer').value = 'List all totals with currency and dates'; handleSend(); break;
+        case 'theme': $('#themeBtn').click(); break;
+        case 'zen': $('#zenBtn').click(); break;
+        case 'newtab': $('#addTab').click(); break;
+        case 'share': shareActive(); break;
+      }
+    });
 
-        // Action Drawer Component
-        function ActionDrawer({ open, onClose, onRun, disabled }) {
-            return (
-                <div
-                    className={`fixed left-0 right-0 bottom-0 transition-transform duration-200 ${
-                        open ? 'translate-y-0' : 'translate-y-full'
-                    }`}
-                    style={{ zIndex: 60 }}
-                >
-                    <div className="mx-auto max-w-[1000px] rounded-t-lg border border-gray-200 bg-white p-4 shadow-xl">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="text-sm font-semibold">🚀 Smart Actions</div>
-                            <button className="text-sm opacity-70 hover:opacity-100" onClick={onClose}>
-                                Close
-                            </button>
-                        </div>
-                        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))' }}>
-                            {ACTIONS.map(a => (
-                                <button
-                                    key={a.id}
-                                    disabled={disabled}
-                                    onClick={() => onRun(a)}
-                                    className="text-left rounded border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-                                    title={a.prompt}
-                                >
-                                    <div className="font-medium">{a.label}</div>
-                                    <div className="text-xs text-gray-500 mt-1 line-clamp-2">{a.prompt}</div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
+    // Share (mock)
+    function shareActive(){
+      const active = $('#tabs .tab.active');
+      toast('Share link created for: ' + (active ? active.textContent.replace('✕','').trim() : 'current tab'));
+    }
+    $('#shareBtn').addEventListener('click', shareActive);
 
-        // PDF Viewer Component
-        function PDFViewer({ doc, onFind }) {
-            const canvasRef = useRef();
-            const [pdf, setPdf] = useState(null);
-            const [page, setPage] = useState(1);
-            const [scale, setScale] = useState(1.1);
-            const [findQuery, setFindQuery] = useState('');
+    // Clear chat
+    $('#clearChat').addEventListener('click', ()=>{ 
+      $('#msgs').innerHTML = '<div class="msg bot">Upload a document to start analyzing it. I can summarize, extract key information, and answer questions about your documents.</div>';
+    });
 
-            // Load PDF when URL changes
-            useEffect(() => {
-                if (!doc?.fileUrl || doc.fileUrl === '#') {
-                    setPdf(null);
-                    return;
-                }
-                
-                // For demo, we'll show a placeholder since we don't have real PDF URLs
-                setPdf({ numPages: 5 }); // Mock PDF object
-            }, [doc?.fileUrl]);
+    // Toasts
+    let toastTimer; function toast(text){
+      let el = $('#toast');
+      if(!el){
+        el = document.createElement('div'); el.id='toast';
+        el.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);padding:.6rem .8rem;border-radius:12px;border:1px solid var(--border);background:linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.55));backdrop-filter:blur(8px);box-shadow:var(--shadow-1);z-index:999;';
+        document.body.appendChild(el);
+      }
+      el.textContent = text; el.style.display='block'; clearTimeout(toastTimer); toastTimer = setTimeout(()=> el.style.display='none', 1800);
+    }
 
-            // Render current page (simplified for demo)
-            useEffect(() => {
-                if (!pdf || !canvasRef.current) return;
-                
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext('2d');
-                canvas.width = 600;
-                canvas.height = 800;
-                
-                // Draw a simple placeholder
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#000000';
-                ctx.font = '16px Arial';
-                ctx.fillText(`Page ${page} of ${pdf.numPages}`, 50, 50);
-                ctx.fillText(doc?.fileName || 'Document', 50, 80);
-                ctx.fillText('PDF content would render here', 50, 120);
-            }, [pdf, page, scale, doc?.fileName]);
-
-            const maxPages = pdf?.numPages || 1;
-
-            return (
-                <section className="flex grow flex-col">
-                    <div className="h-[48px] border-b border-gray-200 flex items-center gap-2 px-3">
-                        <div className="text-sm font-medium truncate">{doc?.fileName || 'Document'}</div>
-                        <div className="ml-auto flex items-center gap-2">
-                            <button 
-                                className="rounded border px-2 py-1 text-sm hover:bg-gray-50"
-                                onClick={() => setScale(z => Math.max(0.5, +(z - 0.1).toFixed(2)))}
-                            >
-                                –
-                            </button>
-                            <div className="min-w-[48px] text-center text-sm">{Math.round(scale * 100)}%</div>
-                            <button 
-                                className="rounded border px-2 py-1 text-sm hover:bg-gray-50"
-                                onClick={() => setScale(z => Math.min(2, +(z + 0.1).toFixed(2)))}
-                            >
-                                +
-                            </button>
-
-                            <div className="mx-2 text-sm">Page</div>
-                            <input
-                                value={page}
-                                onChange={(e) => setPage(Math.max(1, Math.min(maxPages, parseInt(e.target.value || '1', 10))))}
-                                className="w-14 rounded border px-2 py-1 text-sm"
-                                type="number"
-                                min={1} 
-                                max={maxPages}
-                            />
-                            <div className="text-xs text-gray-500">/ {maxPages}</div>
-
-                            <input
-                                placeholder="Find text in document"
-                                className="ml-3 w-[240px] rounded border px-2 py-1 text-sm"
-                                value={findQuery}
-                                onChange={(e) => setFindQuery(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && findQuery.trim()) {
-                                        onFind(findQuery.trim());
-                                    }
-                                }}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="relative grow bg-gray-100 overflow-auto">
-                        {doc && pdf ? (
-                            <div className="w-full h-full flex items-start justify-center py-6">
-                                <canvas 
-                                    ref={canvasRef} 
-                                    className="bg-white shadow-sm rounded border"
-                                    style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
-                                />
-                            </div>
-                        ) : (
-                            <div className="absolute inset-0 grid place-items-center text-gray-500 text-sm">
-                                Drop a document to view (upload begins automatically)
-                            </div>
-                        )}
-                    </div>
-                </section>
-            );
-        }
-
-        // Enhanced Chat Panel with Actions and Markdown
-        function ChatPanel({ docId }) {
-            const [messages, setMessages] = useState([]);
-            const [input, setInput] = useState('');
-            const [status, setStatus] = useState('IDLE');
-            const [drawer, setDrawer] = useState(false);
-            const abortRef = useRef();
-
-            const suggestions = [
-                'Summarize the document',
-                'What are the key points?',
-                'Any important dates or numbers?',
-                'List all totals with currency'
-            ];
-
-            const canSend = useMemo(() => docId && input.trim().length > 0 && status !== 'SENDING', [docId, input, status]);
-
-            async function send(text, meta) {
-                if (!docId) return;
-                
-                const id = crypto.randomUUID();
-                const user = { id, role: 'user', content: text };
-                setMessages(m => [...m, user]);
-                setMessages(m => [...m, { id: id + ':ai', role: 'assistant', content: '' }]);
-                setStatus('SENDING');
-
-                const acc = makeAccumulator((full) => {
-                    setMessages(m => m.map(msg => 
-                        msg.id === id + ':ai' ? { ...msg, content: full } : msg
-                    ));
-                });
-
-                try {
-                    const resp = await chatWithDoc({
-                        docId,
-                        message: text,
-                        meta,
-                        onToken: (t) => acc.push(t),
-                        onDone: () => setStatus('IDLE')
-                    });
-                    abortRef.current = resp.mode === 'stream' ? resp.abort : undefined;
-                } catch (error) {
-                    setMessages(m => m.map(msg => 
-                        msg.id === id + ':ai' ? { ...msg, content: `Error: ${error}` } : msg
-                    ));
-                    setStatus('IDLE');
-                }
-                
-                setInput('');
-            }
-
-            function runAction(action) {
-                setDrawer(false);
-                const instruction = `[ACTION] ${action.label}\n\n${action.prompt}\n\nIf tools are available, execute the action using provided metadata.`;
-                send(instruction, action.meta);
-            }
-
-            return (
-                <aside className="w-[360px] shrink-0 border-l border-gray-200 flex flex-col">
-                    <div className="h-[48px] px-3 flex items-center justify-between border-b border-gray-200">
-                        <div className="text-sm text-gray-600">
-                            {messages.length === 0 ? 'Start chatting with GPT-4o' : 'Conversation'}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button 
-                                className="text-xs rounded border px-2 py-1 hover:bg-gray-50"
-                                onClick={() => setDrawer(v => !v)} 
-                                disabled={!docId}
-                            >
-                                Actions
-                            </button>
-                            {status === 'SENDING' && (
-                                <button className="text-xs underline" onClick={() => abortRef.current?.()}>
-                                    Stop
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="grow overflow-auto p-3 space-y-3">
-                        {messages.map((m) => (
-                            <div key={m.id} className="text-sm leading-6">
-                                <div className="font-medium mb-1">
-                                    {m.role === 'user' ? 'You' : 'Assistant'}
-                                </div>
-                                {m.role === 'assistant' ? (
-                                    <Markdown text={m.content} />
-                                ) : (
-                                    <div className="whitespace-pre-wrap">{m.content}</div>
-                                )}
-                            </div>
-                        ))}
-                        {messages.length === 0 && (
-                            <div className="text-sm text-gray-500 p-3">
-                                Drop a file anywhere to upload • Status: <span className="font-mono">READY</span>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="border-t border-gray-200 p-2 flex flex-wrap gap-2">
-                        {suggestions.map((s) => (
-                            <button
-                                key={s}
-                                className="rounded-full border px-3 py-1 text-xs bg-white hover:bg-gray-50 disabled:opacity-50"
-                                onClick={() => send(s)}
-                                disabled={!docId}
-                            >
-                                {s}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="p-3 flex items-center gap-2">
-                        <button className="rounded-full border w-9 h-9 grid place-items-center bg-white" disabled>
-                            📎
-                        </button>
-                        <input
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey && canSend) {
-                                    e.preventDefault();
-                                    send(input.trim());
-                                }
-                            }}
-                            placeholder="Ask anything…"
-                            className="grow rounded border px-3 py-2 text-sm"
-                            disabled={!docId}
-                        />
-                        <button
-                            className="rounded-full w-9 h-9 grid place-items-center bg-emerald-500 text-white disabled:opacity-40"
-                            disabled={!canSend}
-                            onClick={() => send(input.trim())}
-                        >
-                            ➤
-                        </button>
-                    </div>
-
-                    <ActionDrawer 
-                        open={drawer} 
-                        onClose={() => setDrawer(false)} 
-                        onRun={runAction} 
-                        disabled={!docId} 
-                    />
-                </aside>
-            );
-        }
-
-        // Sidebar Component
-        function Sidebar({ recents, onPick, onUpload }) {
-            const fileRef = useRef();
-            
-            return (
-                <aside className="w-[220px] shrink-0 border-r border-gray-200 p-3 bg-gray-50">
-                    <div className="flex gap-2">
-                        <button
-                            className="rounded border px-3 py-1 text-sm bg-white hover:bg-gray-50"
-                            onClick={() => fileRef.current?.click()}
-                        >
-                            Upload
-                        </button>
-                        <input
-                            ref={fileRef}
-                            type="file"
-                            accept="application/pdf,.doc,.docx,.txt,.md,image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                                const f = e.target.files?.[0];
-                                if (f) onUpload(f);
-                            }}
-                        />
-                    </div>
-
-                    <div className="mt-4 text-xs text-gray-500">RECENT</div>
-                    <ul className="mt-2 space-y-2">
-                        {recents.map((d) => (
-                            <li key={d.docId}>
-                                <button
-                                    className="w-full text-left rounded px-2 py-1 hover:bg-gray-100 text-sm truncate"
-                                    onClick={() => onPick(d)}
-                                >
-                                    {d.fileName}
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                </aside>
-            );
-        }
-
-        // Drop Overlay Component
-        function DropOverlay({ active, onDropFiles }) {
-            return (
-                <div
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                        e.preventDefault();
-                        if (e.dataTransfer?.files?.length) onDropFiles(e.dataTransfer.files);
-                    }}
-                    className={`fixed inset-0 pointer-events-none transition ${
-                        active ? 'bg-black/30' : 'bg-transparent'
-                    }`}
-                    style={{ zIndex: 50 }}
-                >
-                    {active && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="pointer-events-none rounded-lg border-2 border-dashed border-white/80 bg-white/10 px-8 py-6 text-white text-lg backdrop-blur">
-                                Drop files to upload
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        // Main App
-        function App() {
-            const [recents, setRecents] = useState(() => {
-                try { return JSON.parse(localStorage.getItem('recents') || '[]'); } catch { return []; }
-            });
-            const [dragActive, setDragActive] = useState(false);
-            const [doc, setDoc] = useState();
-            const [status, setStatus] = useState('IDLE');
-
-            useEffect(() => {
-                localStorage.setItem('recents', JSON.stringify(recents.slice(0, 20)));
-            }, [recents]);
-
-            async function onFind(query) {
-                if (!doc?.docId) return;
-                // This would normally trigger a search and jump to page
-                console.log('Finding:', query);
-            }
-
-            useEffect(() => {
-                const onDragEnter = (e) => { e.preventDefault(); setDragActive(true); };
-                const onDragLeave = (e) => { e.preventDefault(); setDragActive(false); };
-                const onDrop = (e) => { e.preventDefault(); setDragActive(false); };
-                window.addEventListener('dragenter', onDragEnter);
-                window.addEventListener('dragleave', onDragLeave);
-                window.addEventListener('drop', onDrop);
-                return () => {
-                    window.removeEventListener('dragenter', onDragEnter);
-                    window.removeEventListener('dragleave', onDragLeave);
-                    window.removeEventListener('drop', onDrop);
-                };
-            }, []);
-
-            async function handleUpload(file) {
-                setStatus('UPLOADING');
-                try {
-                    const res = await uploadFile(file);
-                    const next = { docId: res.docId, fileUrl: res.fileUrl, fileName: res.fileName, pageCount: res.pageCount };
-                    setDoc(next);
-                    setRecents(xs => [next, ...xs.filter(x => x.docId !== next.docId)]);
-                } catch (e) {
-                    alert('Upload failed: ' + e.message);
-                } finally {
-                    setStatus('IDLE');
-                }
-            }
-
-            return (
-                <div className="h-screen w-screen overflow-hidden bg-white text-gray-900">
-                    <div className="h-[44px] border-b border-gray-200 px-3 flex items-center justify-between">
-                        <div className="font-semibold">
-                            DocumentGPT <span className="text-xs font-normal text-gray-500">Advanced UI</span>
-                        </div>
-                        <div className="text-xs text-gray-500">
-                            {status === 'UPLOADING' ? 'Uploading…' : 'PDF.js • Streaming • Smart Actions • GPT-4o'}
-                        </div>
-                    </div>
-
-                    <div className="flex h-[calc(100vh-44px)]">
-                        <Sidebar
-                            recents={recents}
-                            onPick={setDoc}
-                            onUpload={handleUpload}
-                        />
-                        <PDFViewer doc={doc} onFind={onFind} />
-                        <ChatPanel docId={doc?.docId} />
-                    </div>
-
-                    <DropOverlay
-                        active={dragActive}
-                        onDropFiles={(files) => { if (files[0]) handleUpload(files[0]); }}
-                    />
-                </div>
-            );
-        }
-
-        // Render
-        ReactDOM.render(<App />, document.getElementById('root'));
-    </script>
+    // Accessibility: focus ring
+    document.addEventListener('keydown', e=>{ if(e.key==='Tab'){ document.body.classList.add('show-focus'); }});
+  </script>
 </body>
 </html>

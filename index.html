@@ -1,694 +1,650 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="auto">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocumentsGPT - Enhanced UI</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/framer-motion@10/dist/framer-motion.js"></script>
-    <script src="https://unpkg.com/react-resizable-panels@0.0.55/dist/index.umd.js"></script>
-    <script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DocumentGPT · AI Document Assistant</title>
+  <style>
+    /* ----------------------
+       Design tokens
+       ---------------------- */
+    :root {
+      --bg: #f7fafc;                /* page background */
+      --panel: #ffffff;              /* cards/panels */
+      --soft: #f1f5f9;               /* panel hover / subtle fills */
+      --border: #e2e8f0;             /* borders */
+      --text: #0f172a;               /* primary text */
+      --muted: #475569;              /* secondary text */
+      --accent-1: #22d3ee;           /* cyan */
+      --accent-2: #3b82f6;           /* blue */
+      --accent-3: #7c3aed;           /* violet */
+      --ring: rgba(59,130,246,.35);
+      --shadow-1: 0 8px 30px rgba(2, 8, 23, .06);
+      --shadow-2: 0 20px 40px rgba(2, 8, 23, .10);
+      --radius: 14px;
+
+      /* Layout widths (JS updates these) */
+      --left: 280px;   /* sidebar left */
+      --right: 380px;  /* sidebar right */
+    }
+    
+    /* Dark mode */
+    [data-theme="dark"] {
+      --bg: #0b1020;
+      --panel: #0f172a;
+      --soft: #111a2e;
+      --border: #18223a;
+      --text: #e6ebff;
+      --muted: #a8b2d1;
+      --ring: rgba(56,189,248,.35);
+      --shadow-1: 0 10px 40px rgba(2, 8, 23, .65);
+      --shadow-2: 0 25px 55px rgba(2, 8, 23, .75);
+    }
+
+    /* ----------------------
+       Base + utilities
+       ---------------------- */
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text);
+      background: radial-gradient(1200px 600px at 30% -10%, rgba(34,211,238,.08), transparent 60%),
+                  radial-gradient(1200px 600px at 80% -20%, rgba(59,130,246,.08), transparent 65%),
+                  var(--bg);
+      -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    }
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+    .pill { display:inline-flex; align-items:center; gap:.5rem; padding:.45rem .7rem; border-radius:999px; background:var(--soft); border:1px solid var(--border); color:var(--muted); }
+    .chip { display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .65rem; border-radius:999px; background:linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.35)); border:1px solid var(--border); color:var(--muted); backdrop-filter: blur(8px); cursor:pointer; transition: .2s ease; }
+    .chip:hover { transform: translateY(-1px); box-shadow: var(--shadow-1); }
+
+    button { font: inherit; color: inherit; background: transparent; border: 1px solid var(--border); border-radius: 12px; padding: .55rem .75rem; cursor: pointer; transition: .2s ease; }
+    button:hover { box-shadow: var(--shadow-1); background: var(--soft); }
+    button.ghost { border-color: transparent; background: transparent; }
+    button.primary { border-color: transparent; color: #0b1325; background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); }
+    button.icon { width: 36px; height: 36px; display: inline-grid; place-items: center; padding: 0; }
+    button.flat { border-color: var(--border); background: var(--panel); }
+    .btnbar { display:flex; gap:.5rem; align-items:center; }
+
+    .tag { padding:.25rem .5rem; border:1px solid var(--border); border-radius:999px; color:var(--muted); background:var(--soft); }
+
+    .blur-card { background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.35)); border:1px solid var(--border); backdrop-filter: blur(10px); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+
+    .divider { height:1px; background:var(--border); margin:.75rem 0; }
+    .tiny { font-size: 12px; color: var(--muted); }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ----------------------
+       Header
+       ---------------------- */
+    .header { position: sticky; top: 0; z-index: 40; height: 56px; display:flex; align-items:center; gap: 12px; justify-content: space-between; padding: 0 .75rem; background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.5)), var(--panel); border-bottom: 1px solid var(--border); backdrop-filter: saturate(120%) blur(10px); }
+    .brand { display:flex; align-items:center; gap:.6rem; font-weight: 600; }
+    .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); box-shadow: 0 0 0 3px rgba(34,211,238,.2); }
+    .header .search { flex: 1; display:flex; align-items:center; gap:.6rem; max-width: 560px; margin: 0 10px; }
+    .search input { width: 100%; padding: .55rem .8rem; border:1px solid var(--border); border-radius: 12px; background: var(--soft); color: var(--text); outline: none; }
+
+    /* ----------------------
+       App layout
+       ---------------------- */
+    .app { height: calc(100dvh - 56px); display: grid; grid-template-columns: var(--left) 10px 1fr 10px var(--right); gap: 0; }
+    .pane { background: var(--panel); border-right: 1px solid var(--border); overflow: hidden; box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+    .pane.right { border-left: 1px solid var(--border); border-right: none; }
+
+    /* Resizers */
+    .resizer { position: relative; cursor: col-resize; display: grid; place-items: center; }
+    .resizer::after { content:''; width: 3px; height: 32px; border-radius: 999px; background: linear-gradient(180deg, var(--accent-1), var(--accent-2)); opacity: .6; }
+
+    /* Left sidebar */
+    .left { display:flex; flex-direction:column; height: 100%; }
+    .left .section { padding: .8rem; }
+    .uploader { display:grid; grid-template-columns: 1fr auto; gap:.5rem; }
+    .uploader .file { padding:.55rem .7rem; border:1px dashed var(--border); border-radius: 12px; background: var(--soft); }
+
+    .recent { padding: .4rem .8rem .8rem; overflow:auto; }
+    .recent h4 { margin:.4rem 0 .35rem; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .4px; }
+    .recent .item { display:flex; align-items:center; gap:.6rem; padding:.45rem .5rem; border-radius: 10px; cursor:pointer; color: var(--muted); }
+    .recent .item:hover { background: var(--soft); color: var(--text); }
+    .avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(45deg, var(--accent-1), var(--accent-2)); box-shadow: inset 0 0 0 2px #fff3; }
+
+    /* Center / document area */
+    .center { display:flex; flex-direction:column; height:100%; }
+    .topbar { display:flex; align-items:center; justify-content: space-between; gap:.75rem; padding: .5rem .6rem; border-bottom:1px solid var(--border); background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.5)), var(--panel); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 10; }
+
+    .tabs { display:flex; align-items:center; gap:.35rem; overflow:auto hidden; scrollbar-width: none; }
+    .tab { display:inline-flex; align-items:center; gap:.5rem; border-radius: 999px; padding:.45rem .75rem; border:1px solid var(--border); background: var(--soft); color: var(--muted); white-space: nowrap; }
+    .tab.active { background: linear-gradient(90deg, rgba(34,211,238,.18), rgba(59,130,246,.18)); color: var(--text); border-color: transparent; }
+    .tab .x { opacity:.7; }
+
+    .tools { display:flex; align-items:center; gap:.5rem; }
+    .tools .kbd { border:1px solid var(--border); background: var(--soft); padding: .2rem .4rem; border-radius: 8px; font-size: 12px; color: var(--muted); }
+
+    .viewer { position: relative; flex: 1; display:grid; place-items:center; overflow:auto; background: repeating-linear-gradient(45deg, var(--soft), var(--soft) 8px, transparent 8px, transparent 16px); }
+    .page { width:min(900px, 95%); height: min(80dvh, 1050px); background:white; border-radius: 10px; box-shadow: var(--shadow-2); position: relative; overflow:hidden; display:grid; place-items:center; }
+    [data-theme="dark"] .page { background: #0b0f1e; }
+    .drop-hint { position: absolute; inset: 0; display:grid; place-items:center; pointer-events:none; color:var(--muted); }
+
+    .embed-wrap { width: min(1000px, 95%); height: calc(100% - 24px); transform-origin: top center; }
+    .embed-wrap embed { width: 100%; height: 100%; border: none; background: white; border-radius: 8px; box-shadow: var(--shadow-2); }
+
+    /* Right / chat */
+    .right { display:flex; flex-direction:column; height:100%; }
+    .right .bar { padding:.55rem .6rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content: space-between; gap:.5rem; }
+    .right .hints { padding:.6rem; display:flex; flex-wrap: wrap; gap:.45rem; border-bottom:1px solid var(--border); }
+
+    .msgs { flex:1; overflow:auto; padding:.75rem; display:flex; flex-direction:column; gap:.6rem; }
+    .msg { max-width: 88%; padding:.6rem .75rem; border-radius: 14px; box-shadow: var(--shadow-1); }
+    .msg.bot { align-self:flex-start; background: var(--panel); border:1px solid var(--border); }
+    .msg.me { align-self:flex-end; background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); color:#0b1325; border: 1px solid transparent; }
+
+    .composer { padding:.6rem; border-top:1px solid var(--border); display:flex; gap:.5rem; align-items:center; background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.5)), var(--panel); backdrop-filter: blur(8px); }
+    .composer .box { position: relative; flex:1; }
+    .composer textarea { width:100%; min-height:42px; max-height: 180px; padding:.65rem .85rem; border:1px solid var(--border); background: var(--soft); color:var(--text); border-radius: 12px; resize: none; outline: none; }
+
+    /* Command palette */
+    .palette { position: fixed; inset: 0; display:none; place-items:center; background: rgba(2, 6, 23, .35); backdrop-filter: blur(4px); z-index: 100; }
+    .palette.show { display:grid; }
+    .palette .panel { width: min(740px, 95vw); background: var(--panel); border:1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-2); overflow:hidden; }
+    .palette .panel header { padding:.75rem .9rem; border-bottom:1px solid var(--border); display:flex; gap:.6rem; align-items:center; }
+    .palette input { width:100%; padding:.6rem .7rem; border:1px solid var(--border); background: var(--soft); border-radius: 10px; outline:none; }
+    .palette .items { max-height: 52vh; overflow:auto; }
+    .palette .row { padding:.6rem .9rem; display:flex; align-items:center; gap:.6rem; cursor:pointer; }
+    .palette .row:hover { background: var(--soft); }
+
+    /* Zen mode */
+    [data-zen="on"] .left, [data-zen="on"] .right, [data-zen="on"] .resizer { display:none; }
+    [data-zen="on"] .app { grid-template-columns: 1fr; }
+
+    /* Responsive */
+    @media (max-width: 1080px) {
+      :root{ --right: 320px; --left: 240px; }
+    }
+    @media (max-width: 920px) {
+      .app { grid-template-columns: var(--left) 8px 1fr; }
+      .right, .resizer:last-of-type { display: none; }
+    }
+    @media (max-width: 720px) {
+      .app { grid-template-columns: 1fr; }
+      .left, .resizer { display:none; }
+      .header .search { display:none; }
+    }
+      /* Focus mode: center document + right chat */
+    [data-focus="on"] .header { display:flex; }
+    [data-focus="on"] .left, [data-focus="on"] .resizer, [data-focus="on"] .center .topbar { display:none; }
+    [data-focus="on"] .app { grid-template-columns: 1fr var(--right); }
+    [data-focus="on"] .right { display:flex !important; }
+    @media (max-width: 920px) {
+      [data-focus="on"] .app { grid-template-columns: 1fr minmax(280px, 40vw); }
+      [data-focus="on"] .right { display:flex !important; }
+    }
+
+    .status { margin: .5rem 0; padding: .5rem .7rem; border-radius: 10px; font-size: 13px; }
+    .status.success { background: rgba(34, 197, 94, 0.1); color: #16a34a; border: 1px solid rgba(34, 197, 94, 0.2); }
+    .status.error { background: rgba(239, 68, 68, 0.1); color: #dc2626; border: 1px solid rgba(239, 68, 68, 0.2); }
+    .status.loading { background: rgba(245, 158, 11, 0.1); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.2); }
+  </style>
 </head>
 <body>
-    <div id="root"></div>
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">
+      <span class="dot" aria-hidden="true"></span>
+      <span>DocumentGPT <span class="tiny">v5</span></span>
+    </div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
-        const { motion, AnimatePresence } = Motion;
-        const { Panel, PanelGroup, PanelResizeHandle } = ReactResizablePanels;
-        const { 
-            Upload, FileText, Plus, Minus, Search, Paperclip, Send, 
-            SunMedium, Moon, ChevronRight, Sparkles, Bot, User, Play, Pause,
-            Command: CmdKey, X, Check, ChevronLeft
-        } = LucideReact;
+    <div class="search" role="search">
+      <input id="globalSearch" placeholder="Ctrl/⌘ K – command palette · Search docs & actions" />
+    </div>
 
-        const API_BASE = 'https://i1dy8i3692.execute-api.us-east-1.amazonaws.com/prod';
+    <div class="btnbar">
+      <button class="icon ghost" id="zenBtn" title="Focus mode (doc + chat)">
+        <!-- Maximize icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9V5a2 2 0 0 1 2-2h4"/><path d="M21 9V5a2 2 0 0 0-2-2h-4"/><path d="M3 15v4a2 2 0 0 0 2 2h4"/><path d="M21 15v4a2 2 0 0 1-2 2h-4"/></svg>
+      </button>
+      <button class="icon ghost" id="themeBtn" title="Toggle theme">
+        <!-- sun/moon -->
+        <svg id="sunIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M20 12h2M2 12H4m14.14 5.66 1.41 1.41M4.45 4.45 5.86 5.86m0 12.28-1.41 1.41M19.55 4.45 18.14 5.86"/></svg>
+      </button>
+    </div>
+  </div>
 
-        const PALETTES = {
-            sapphire: { from: "#2563eb", via: "#1e40af", to: "#06b6d4", name: "Sapphire" },
-            emerald: { from: "#10b981", via: "#0d9488", to: "#22c55e", name: "Emerald" },
-            violet: { from: "#7c3aed", via: "#9333ea", to: "#a855f7", name: "Violet" },
-            amber: { from: "#f59e0b", via: "#f97316", to: "#facc15", name: "Amber" },
-            crimson: { from: "#ef4444", via: "#e11d48", to: "#fb923c", name: "Crimson" },
+  <!-- App Grid -->
+  <div class="app" id="appGrid">
+    <!-- Left Pane -->
+    <aside class="pane left">
+      <div class="section" style="border-bottom:1px solid var(--border)">
+        <div class="uploader" aria-label="Upload">
+          <label class="file" for="fileInput">Drop or choose files</label>
+          <input id="fileInput" class="sr-only" type="file" accept="application/pdf,.txt,.md,.doc,.docx,.json,.csv" multiple>
+          <button id="uploadBtn" class="primary">Upload</button>
+        </div>
+        <div id="uploadStatus"></div>
+      </div>
+
+      <div class="recent">
+        <h4>RECENT</h4>
+        <div class="item" data-open-tab="AI assistant"><span class="avatar"></span> <div><div>AI assistant</div><div class="tiny">2h ago</div></div></div>
+        <div class="item" data-open-tab="Q3 review"><span class="avatar"></span> <div><div>Q3 review</div><div class="tiny">2h ago</div></div></div>
+        <div class="item" data-open-tab="Contract QA"><span class="avatar"></span> <div><div>Contract QA</div><div class="tiny">2h ago</div></div></div>
+      </div>
+    </aside>
+
+    <!-- Resizer L -->
+    <div class="resizer" data-side="left" title="Drag to resize"></div>
+
+    <!-- Center Pane -->
+    <section class="pane center">
+      <div class="topbar">
+        <div class="tabs" id="tabs">
+          <button class="tab active" data-id="welcome"><span>Welcome</span></button>
+          <button class="tab ghost" id="addTab" title="Open new tab">＋</button>
+        </div>
+
+        <div class="tools">
+          <div class="btnbar" role="toolbar" aria-label="Zoom">
+            <button class="icon flat" id="zoomOut" title="Zoom out">–</button>
+            <span class="kbd" id="zoomLabel">110%</span>
+            <button class="icon flat" id="zoomIn" title="Zoom in">＋</button>
+          </div>
+          <span class="tiny">Page <b id="pageNow">1</b> / <b id="pageTotal">1</b></span>
+          <input id="findInDoc" placeholder="Find text in this page" style="padding:.45rem .6rem; border-radius:10px; border:1px solid var(--border); background:var(--soft); width: 220px;">
+          <button class="ghost" id="shareBtn">Share</button>
+        </div>
+      </div>
+
+      <div class="viewer" id="viewer" tabindex="0">
+        <div class="drop-hint" id="dropHint">Drop a document to view (upload begins automatically)</div>
+        <div class="embed-wrap" id="embedWrap" style="display:none"></div>
+        <div class="page" id="placeholderPage" aria-label="Document page">
+          <div style="text-align:center">
+            <div class="tiny" style="letter-spacing:.04em;color:var(--muted);margin-bottom:.25rem">Preview</div>
+            <div style="font-weight:700;font-size:20px">Your document will appear here</div>
+            <div class="tiny" style="margin-top:.5rem">Drag & drop a PDF or click <b>Upload</b> · Use <b>Ctrl/⌘ + K</b> for commands</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Resizer R -->
+    <div class="resizer" data-side="right" title="Drag to resize"></div>
+
+    <!-- Right Pane (Chat) -->
+    <aside class="pane right">
+      <div class="bar">
+        <div class="btnbar">
+          <span class="pill"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 4v7c0 3.6-3.6 6-7 7-3.4-1-7-3.4-7-7V7l7-4z"/></svg> GPT‑4o</span>
+          <span class="pill">High quality</span>
+        </div>
+        <div class="btnbar">
+          <button class="ghost" id="clearChat">Clear</button>
+        </div>
+      </div>
+
+      <div class="hints">
+        <div class="chip" data-hint="Summarize this document">Summarize the document</div>
+        <div class="chip" data-hint="What are the key points?">What are the key points?</div>
+        <div class="chip" data-hint="List all dates and currency">Any important dates or numbers?</div>
+        <div class="chip" data-hint="Extract totals with currency and page numbers">List all totals with currency</div>
+      </div>
+
+      <div class="msgs" id="msgs">
+        <div class="msg bot">Upload a document to start analyzing it. I can summarize, extract key information, and answer questions about your documents.</div>
+      </div>
+
+      <div class="composer">
+        <button class="icon" id="attachBtn" title="Attach a file"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21.44 11.05 12 20.5a6 6 0 1 1-8.49-8.49L13.5 2.5a4 4 0 1 1 5.66 5.66L7.75 19.56"/></svg></button>
+        <div class="box"><textarea id="composer" placeholder="Ask anything…"></textarea></div>
+        <button class="icon primary" id="sendBtn" title="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0b1325" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg></button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Command palette -->
+  <div class="palette" id="palette" aria-hidden="true">
+    <div class="panel">
+      <header>
+        <span class="pill" style="background:linear-gradient(90deg, var(--accent-1), var(--accent-2)); color:#0b1325; border-color:transparent">⌘K</span>
+        <input id="paletteInput" placeholder="Search commands (upload, summarize, key points, toggle theme, open settings…)" />
+      </header>
+      <div class="items" id="paletteItems">
+        <div class="row" data-cmd="upload">Upload document…</div>
+        <div class="row" data-cmd="summarize">Summarize current tab</div>
+        <div class="row" data-cmd="keypoints">Extract key points</div>
+        <div class="row" data-cmd="numbers">Find dates & currency</div>
+        <div class="row" data-cmd="theme">Toggle theme</div>
+        <div class="row" data-cmd="zen">Toggle focus mode (doc + chat)</div>
+        <div class="row" data-cmd="newtab">Open new empty tab</div>
+        <div class="row" data-cmd="share">Share current tab</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Utilities
+    const $ = (q, el=document) => el.querySelector(q);
+    const $$ = (q, el=document) => Array.from(el.querySelectorAll(q));
+
+    // DocumentGPT API
+    const API_BASE = 'https://i1dy8i3692.execute-api.us-east-1.amazonaws.com/prod';
+    let currentVectorStoreId = null;
+
+    const state = {
+      theme: localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
+      left: localStorage.getItem('left') || getComputedStyle(document.documentElement).getPropertyValue('--left'),
+      right: localStorage.getItem('right') || getComputedStyle(document.documentElement).getPropertyValue('--right'),
+      zoom: 1.1,
+      tabs: new Map(), // id -> {name, url, vectorStoreId}
+      active: null
+    };
+
+    function applyTheme() {
+      document.documentElement.setAttribute('data-theme', state.theme);
+    }
+
+    function setCols(left, right) {
+      document.documentElement.style.setProperty('--left', left);
+      document.documentElement.style.setProperty('--right', right);
+      localStorage.setItem('left', left);
+      localStorage.setItem('right', right);
+    }
+
+    applyTheme();
+    setCols(state.left, state.right);
+
+    // Theme & zen
+    $('#themeBtn').addEventListener('click', () => {
+      state.theme = state.theme === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('theme', state.theme); applyTheme();
+    });
+    $('#zenBtn').addEventListener('click', () => {
+      const on = document.body.getAttribute('data-focus') === 'on' ? 'off' : 'on';
+      document.body.setAttribute('data-focus', on);
+    });
+
+    // Resizers
+    $$('.resizer').forEach(r => {
+      r.addEventListener('pointerdown', e => {
+        r.setPointerCapture(e.pointerId);
+        const side = r.dataset.side;
+        const startX = e.clientX;
+        const rect = $('#appGrid').getBoundingClientRect();
+        const leftStart = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--left'));
+        const rightStart = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--right'));
+        const onMove = ev => {
+          const dx = ev.clientX - startX;
+          if (side === 'left') {
+            const newLeft = Math.min(Math.max(180, leftStart + dx), rect.width - 420); // clamp
+            setCols(newLeft + 'px', getComputedStyle(document.documentElement).getPropertyValue('--right'));
+          } else {
+            const newRight = Math.min(Math.max(280, rightStart - dx), rect.width - 420);
+            setCols(getComputedStyle(document.documentElement).getPropertyValue('--left'), newRight + 'px');
+          }
         };
+        const onUp = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp, { once: true });
+      });
+    });
 
-        function Chip({ children, onClick, className = "" }) {
-            return (
-                <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    whileHover={{ y: -1 }}
-                    onClick={onClick}
-                    className={`px-2.5 py-1.5 rounded-full text-[13px] border hover:shadow-sm transition-colors ${className}`}
-                >
-                    {children}
-                </motion.button>
-            );
-        }
+    // Upload
+    const fileInput = $('#fileInput');
+    $('#uploadBtn').addEventListener('click', () => fileInput.click());
 
-        function Divider({ className = "" }) {
-            return <div className={`h-px ${className}`} />;
-        }
+    fileInput.addEventListener('change', e => {
+      if (!e.target.files) return;
+      handleFiles(e.target.files);
+      e.target.value = '';
+    });
 
-        function Message({ role, text, gradStyle, bubbleLight, bubbleDark }) {
-            const isUser = role === "user";
-            return (
-                <div className={`flex w-full gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
-                    {!isUser && (
-                        <div className={`size-7 rounded-full grid place-items-center ${bubbleLight}`}>
-                            <Bot size={16} />
-                        </div>
-                    )}
-                    <div
-                        className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed shadow-sm ${
-                            isUser ? "text-white" : bubbleDark
-                        }`}
-                        style={isUser ? { ...gradStyle } : undefined}
-                    >
-                        {text}
-                    </div>
-                    {isUser && (
-                        <div className={`size-7 rounded-full grid place-items-center ${bubbleLight}`}>
-                            <User size={16} />
-                        </div>
-                    )}
-                </div>
-            );
-        }
+    // Drag & drop
+    const viewer = $('#viewer');
+    ['dragenter','dragover'].forEach(ev => viewer.addEventListener(ev, e => { e.preventDefault(); $('#dropHint').textContent = 'Release to upload…'; }));
+    ;['dragleave','drop'].forEach(ev => viewer.addEventListener(ev, e => { e.preventDefault(); $('#dropHint').textContent = 'Drop a document to view (upload begins automatically)'; }));
+    viewer.addEventListener('drop', e => { handleFiles(e.dataTransfer.files); });
 
-        function Toasts({ toasts, remove, t }) {
-            return (
-                <div className="pointer-events-none fixed inset-x-0 bottom-3 z-[60] flex justify-center">
-                    <div className="space-y-2">
-                        <AnimatePresence>
-                            {toasts.map((toast) => (
-                                <motion.div
-                                    key={toast.id}
-                                    initial={{ opacity: 0, y: 6 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: 6 }}
-                                    className={`pointer-events-auto rounded-xl border ${t.border} ${t.fieldBg} backdrop-blur px-3.5 py-2 shadow-lg`}
-                                >
-                                    <div className="flex items-center gap-2 text-sm">
-                                        <Check size={14} className="text-emerald-500" />
-                                        <span>{toast.text}</span>
-                                        <button
-                                            onClick={() => remove(toast.id)}
-                                            className="ml-2 p-1 rounded hover:bg-white/20"
-                                            aria-label="Close toast"
-                                        >
-                                            <X size={12} />
-                                        </button>
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </AnimatePresence>
-                    </div>
-                </div>
-            );
-        }
+    async function handleFiles(files) {
+      for (const file of Array.from(files)) {
+        const id = 'tab_' + Math.random().toString(36).slice(2, 8);
+        
+        // Show upload status
+        showStatus('Uploading ' + file.name + '...', 'loading');
+        
+        try {
+          // Convert file to base64
+          const base64Content = await fileToBase64(file);
+          
+          // Upload to DocumentGPT API
+          const response = await fetch(`${API_BASE}/upload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              file_content: base64Content.split(',')[1],
+              user_id: 'web-user'
+            })
+          });
 
-        function CommandMenu({ open, onClose, actions, t }) {
-            const [query, setQuery] = useState("");
-            const list = useMemo(() => {
-                const q = query.trim().toLowerCase();
-                return q ? actions.filter((a) => a.label.toLowerCase().includes(q)) : actions;
-            }, [query, actions]);
-
-            useEffect(() => {
-                function onKey(e) { if (e.key === "Escape") onClose(); }
-                if (open) window.addEventListener("keydown", onKey);
-                return () => window.removeEventListener("keydown", onKey);
-            }, [open, onClose]);
-
-            return (
-                <AnimatePresence>
-                    {open && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70]" aria-modal role="dialog">
-                            <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.98, y: 6 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.98, y: 6 }}
-                                transition={{ type: "spring", stiffness: 380, damping: 28 }}
-                                className={`absolute left-1/2 top-16 w-[92vw] max-w-xl -translate-x-1/2 rounded-2xl border ${t.border} ${t.panelBg} shadow-xl`}
-                            >
-                                <div className="flex items-center gap-2 p-2">
-                                    <CmdKey size={16} className="opacity-70 ml-1" />
-                                    <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Type a command… (e.g., theme, upload, palette)" className={`flex-1 bg-transparent outline-none px-2 py-2 text-sm`} />
-                                    <button onClick={onClose} className={`rounded-lg px-2 py-1 text-xs border ${t.border}`}>Esc</button>
-                                </div>
-                                <Divider className={t.divider} />
-                                <div className="max-h-[50vh] overflow-y-auto p-2">
-                                    {list.map((a) => (
-                                        <button key={a.id} onClick={() => { a.onSelect?.(); onClose(); }} className={`w-full text-left px-3 py-2 rounded-xl border ${t.border} hover:bg-white/5`}>
-                                            <div className="flex items-center justify-between gap-4">
-                                                <div className="flex items-center gap-2">{a.icon}<span className="text-sm font-medium">{a.label}</span></div>
-                                                {a.kbd && <span className="text-[10px] opacity-70">{a.kbd}</span>}
-                                            </div>
-                                        </button>
-                                    ))}
-                                    {list.length === 0 && (<div className="p-4 text-sm opacity-70">No matches. Try "palette" or "upload".</div>)}
-                                </div>
-                            </motion.div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            );
-        }
-
-        // API Functions
-        async function uploadFile(file) {
-            const reader = new FileReader();
-            return new Promise((resolve, reject) => {
-                reader.onload = async () => {
-                    try {
-                        const base64Content = reader.result.split(',')[1];
-                        const response = await fetch(`${API_BASE}/upload`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                filename: file.name,
-                                file_content: base64Content,
-                                user_id: 'web-user'
-                            })
-                        });
-                        
-                        if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
-                        const data = await response.json();
-                        resolve({
-                            vectorStoreId: data.vector_store_id,
-                            fileId: data.file_id,
-                            fileName: file.name
-                        });
-                    } catch (error) {
-                        reject(error);
-                    }
-                };
-                reader.readAsDataURL(file);
+          const result = await response.json();
+          
+          if (response.ok) {
+            const url = URL.createObjectURL(file);
+            state.tabs.set(id, { 
+              name: file.name, 
+              url: url,
+              vectorStoreId: result.vector_store_id 
             });
+            addTab(id, file.name);
+            activate(id);
+            showStatus('✅ ' + result.message, 'success');
+          } else {
+            showStatus('❌ ' + result.error, 'error');
+          }
+        } catch (error) {
+          showStatus('❌ Upload failed: ' + error.message, 'error');
         }
+      }
+    }
 
-        async function chatWithDoc(messages, vectorStoreId) {
-            const response = await fetch(`${API_BASE}/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    messages,
-                    vector_store_id: vectorStoreId
-                })
-            });
-            
-            if (!response.ok) throw new Error(`Chat failed: ${response.status}`);
-            const data = await response.json();
-            return data.response || 'No response received';
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+      });
+    }
+
+    function showStatus(message, type) {
+      const statusEl = $('#uploadStatus');
+      statusEl.innerHTML = `<div class="status ${type}">${message}</div>`;
+      setTimeout(() => statusEl.innerHTML = '', 3000);
+    }
+
+    // Tabs
+    function addTab(id, name) {
+      const b = document.createElement('button');
+      b.className = 'tab'; b.dataset.id = id; b.innerHTML = `<span>${name}</span><span class="x" title="Close">✕</span>`;
+      $('#tabs').insertBefore(b, $('#addTab'));
+    }
+
+    function activate(id) {
+      state.active = id;
+      $$('#tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.id === id));
+
+      const tab = state.tabs.get(id);
+      if (tab && tab.url) {
+        currentVectorStoreId = tab.vectorStoreId;
+        $('#placeholderPage').style.display = 'none';
+        $('#embedWrap').style.display = 'block';
+        $('#embedWrap').innerHTML = `<embed id="pdf" type="application/pdf" src="${tab.url}" />`;
+        applyZoom();
+      } else {
+        currentVectorStoreId = null;
+        $('#embedWrap').style.display = 'none';
+        $('#placeholderPage').style.display = 'grid';
+      }
+    }
+
+    $('#tabs').addEventListener('click', e => {
+      const t = e.target.closest('.tab');
+      if (!t) return;
+      const isClose = e.target.classList.contains('x');
+      const id = t.dataset.id;
+      if (isClose) {
+        // Close tab
+        const wasActive = t.classList.contains('active');
+        t.remove();
+        const info = state.tabs.get(id);
+        if (info && info.url) URL.revokeObjectURL(info.url);
+        state.tabs.delete(id);
+        if (wasActive) {
+          const first = $('#tabs .tab');
+          first ? activate(first.dataset.id) : activate('welcome');
         }
+      } else {
+        activate(id);
+      }
+    });
 
-        function DocumentsGPTVibe() {
-            const [dark, setDark] = useState(() => {
-                try {
-                    const s = typeof localStorage !== "undefined" ? localStorage.getItem("dgpt:theme") : null;
-                    return s === "dark";
-                } catch {
-                    return false;
-                }
-            });
+    $('#addTab').addEventListener('click', () => {
+      const id = 'empty_' + Math.random().toString(36).slice(2,6);
+      state.tabs.set(id, { name: 'Untitled', url: null, vectorStoreId: null });
+      addTab(id, 'Untitled');
+      activate(id);
+    });
 
-            // Tabs state
-            const initIdRef = useRef(null);
-            if (initIdRef.current === null) initIdRef.current = uid();
-            const [docs, setDocs] = useState(() => [{ id: initIdRef.current, name: "Sample.pdf", pages: 6, page: 1, zoom: 110 }]);
-            const [activeId, setActiveId] = useState(() => initIdRef.current);
+    // Preload welcome tab
+    state.tabs.set('welcome', { name: 'Welcome', url: null, vectorStoreId: null });
+    activate('welcome');
 
-            const activeDoc = useMemo(() => docs.find((d) => d.id === activeId) || docs[0], [docs, activeId]);
-            const fileName = activeDoc?.name || "Untitled.pdf";
-            const pages = activeDoc?.pages || 0;
-            const page = activeDoc?.page || 1;
-            const zoom = activeDoc?.zoom || 110;
+    // Zoom controls
+    function applyZoom(){
+      const wrap = $('#embedWrap');
+      if (!wrap) return;
+      wrap.style.transform = `scale(${state.zoom})`;
+      wrap.style.margin = `${(state.zoom-1)*40}px auto`;
+      $('#zoomLabel').textContent = Math.round(state.zoom*100) + '%';
+    }
+    $('#zoomIn').addEventListener('click', ()=>{ state.zoom = Math.min(2, state.zoom + 0.1); applyZoom(); });
+    $('#zoomOut').addEventListener('click', ()=>{ state.zoom = Math.max(0.6, state.zoom - 0.1); applyZoom(); });
 
-            const [searchTerm, setSearchTerm] = useState("");
-            const [chatInput, setChatInput] = useState("");
-            const [messages, setMessages] = useState([{ role: "assistant", text: "Start chatting about your document. I can summarize, extract totals, and hunt for dates." }]);
-            const [recording, setRecording] = useState(false);
-            const [status, setStatus] = useState("IDLE");
-            const [brand, setBrand] = useState(PALETTES.sapphire);
-            const [vectorStoreId, setVectorStoreId] = useState(null);
-            const [recents, setRecents] = useState([
-                { title: "AI assistant", time: "2h ago" },
-                { title: "Q3 review", time: "2h ago" },
-                { title: "Contract QA", time: "2h ago" },
-            ]);
-            const [showCmd, setShowCmd] = useState(false);
-            const [toasts, setToasts] = useState([]);
+    // Find (note: real PDF text search requires PDF.js; here we simulate a UX hook)
+    $('#findInDoc').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ toast('Search: simulated in mock. Hook your PDF engine here.'); }});
 
-            const gradStyle = useMemo(
-                () => ({ backgroundImage: `linear-gradient(90deg, ${brand.from}, ${brand.via}, ${brand.to})` }),
-                [brand]
-            );
+    // Right pane: suggestions & chat
+    $$('.chip').forEach(c => c.addEventListener('click', ()=>{ $('#composer').value = c.dataset.hint; $('#composer').focus(); }));
 
-            const t = useMemo(() => {
-                return dark
-                    ? {
-                        text: "text-slate-100",
-                        subtext: "text-slate-400",
-                        muted: "text-slate-300",
-                        softBg: "bg-gradient-to-b from-slate-950 to-slate-900",
-                        panelBg: "bg-gradient-to-b from-slate-950 to-slate-900",
-                        pageBg: "bg-slate-950",
-                        border: "border-slate-800",
-                        ring: "ring-1 ring-slate-600/30",
-                        hover: "hover:bg-slate-900",
-                        chipBg: "bg-slate-900/40",
-                        chipBorder: "border-slate-700",
-                        bubbleLight: "bg-slate-800/40 text-slate-200",
-                        bubbleDark: "bg-slate-900/70 border border-slate-800",
-                        divider: "bg-slate-800",
-                        headerBlurBg: "supports-[backdrop-filter]:bg-slate-950/50",
-                        fieldBg: "bg-slate-950/60",
-                        statusGreen: "text-green-400",
-                        dashed: "border-dashed border-slate-700",
-                    }
-                    : {
-                        text: "text-slate-900",
-                        subtext: "text-slate-500",
-                        muted: "text-slate-600",
-                        softBg: "bg-gradient-to-b from-white to-slate-50",
-                        panelBg: "bg-gradient-to-b from-white to-slate-50",
-                        pageBg: "bg-white",
-                        border: "border-slate-200",
-                        ring: "ring-1 ring-slate-300/50",
-                        hover: "hover:bg-slate-100",
-                        chipBg: "bg-white/60",
-                        chipBorder: "border-slate-200",
-                        bubbleLight: "bg-slate-200/40 text-slate-600",
-                        bubbleDark: "bg-white/80 border border-slate-200",
-                        divider: "bg-slate-200",
-                        headerBlurBg: "supports-[backdrop-filter]:bg-white/60",
-                        fieldBg: "bg-white/70",
-                        statusGreen: "text-green-600",
-                        dashed: "border-dashed border-slate-300",
-                    };
-            }, [dark]);
+    function pushMsg(text, who='me'){
+      const d = document.createElement('div');
+      d.className = 'msg ' + (who==='me'?'me':'bot');
+      d.textContent = text;
+      $('#msgs').appendChild(d);
+      d.scrollIntoView({behavior:'smooth', block:'end'});
+    }
 
-            const fileInputRef = useRef(null);
-            const viewerRef = useRef(null);
-            const pageRefs = useRef([]);
+    async function handleSend(){
+      const v = $('#composer').value.trim(); 
+      if(!v) return;
+      
+      $('#composer').value = '';
+      pushMsg(v, 'me');
+      
+      if (!currentVectorStoreId) {
+        pushMsg('Please upload a document first to start chatting about it.', 'bot');
+        return;
+      }
 
-            useEffect(() => {
-                try { localStorage.setItem("dgpt:theme", dark ? "dark" : "light"); } catch {}
-            }, [dark]);
+      const loadingMsg = document.createElement('div');
+      loadingMsg.className = 'msg bot';
+      loadingMsg.textContent = '🤔 Processing...';
+      $('#msgs').appendChild(loadingMsg);
+      loadingMsg.scrollIntoView({behavior:'smooth', block:'end'});
 
-            useEffect(() => {
-                const el = pageRefs.current[page - 1];
-                if (el && viewerRef.current) {
-                    el.scrollIntoView({ behavior: "smooth", block: "start" });
-                }
-            }, [page]);
+      try {
+        const response = await fetch(`${API_BASE}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: v }],
+            vector_store_id: currentVectorStoreId,
+            user_email: 'user@documentgpt.io'
+          })
+        });
 
-            useEffect(() => {
-                pageRefs.current = [];
-                if (viewerRef.current) viewerRef.current.scrollTop = 0;
-            }, [activeId]);
-
-            useEffect(() => {
-                function onKey(e) {
-                    const k = e.key.toLowerCase();
-                    if ((e.ctrlKey || e.metaKey) && k === "/") {
-                        e.preventDefault();
-                        setDark((d) => !d);
-                        pushToast("Theme toggled");
-                    }
-                    if ((e.ctrlKey || e.metaKey) && k === "f") {
-                        e.preventDefault();
-                        const el = document.querySelector("input[placeholder='Find text…']");
-                        if (el) el.focus();
-                    }
-                    if ((e.ctrlKey || e.metaKey) && k === "k") {
-                        e.preventDefault();
-                        setShowCmd(true);
-                    }
-                }
-                window.addEventListener("keydown", onKey);
-                return () => window.removeEventListener("keydown", onKey);
-            }, []);
-
-            function pushToast(text) {
-                const id = Date.now() + Math.random();
-                setToasts((tq) => [...tq, { id, text }]);
-                setTimeout(() => removeToast(id), 2000);
-            }
-            function removeToast(id) {
-                setToasts((tq) => tq.filter((t) => t.id !== id));
-            }
-
-            function uid() {
-                return Math.random().toString(36).slice(2) + Date.now().toString(36);
-            }
-
-            function setPage(next) {
-                setDocs((prev) => prev.map((d) => d.id === activeId ? { ...d, page: clampPage(d, typeof next === "function" ? next(d.page) : next) } : d));
-            }
-            function setZoomVal(next) {
-                setDocs((prev) => prev.map((d) => d.id === activeId ? { ...d, zoom: clampZoom(typeof next === "function" ? next(d.zoom) : next) } : d));
-            }
-            function clampPage(d, p) { return Math.max(1, Math.min(d.pages || 1, p)); }
-            function clampZoom(z) { return Math.max(30, Math.min(300, z)); }
-
-            function closeTab(id) {
-                setDocs((prev) => {
-                    if (prev.length <= 1) { pushToast("Can't close the last tab"); return prev; }
-                    const idx = prev.findIndex((d) => d.id === id);
-                    if (idx === -1) return prev;
-                    const nextDocs = prev.filter((d) => d.id !== id);
-                    if (id === activeId) {
-                        const newIdx = Math.max(0, idx - 1);
-                        const newActive = nextDocs[newIdx];
-                        setActiveId(newActive.id);
-                    }
-                    return nextDocs;
-                });
-            }
-
-            async function handleUpload(file) {
-                try {
-                    setStatus("UPLOADING");
-                    const newDoc = { id: uid(), name: file.name, pages: Math.max(3, Math.min(12, Math.ceil(file.size / (220 * 1024)))), page: 1, zoom: 110 };
-                    setDocs((prev) => [...prev, newDoc]);
-                    setActiveId(newDoc.id);
-                    
-                    const result = await uploadFile(file);
-                    setVectorStoreId(result.vectorStoreId);
-                    
-                    const newRecent = { 
-                        title: file.name, 
-                        time: "just now",
-                        vectorStoreId: result.vectorStoreId,
-                        fileName: file.name
-                    };
-                    setRecents(prev => [newRecent, ...prev.filter(r => r.title !== file.name)]);
-                    
-                    setMessages(prev => [...prev, {
-                        role: "assistant",
-                        text: `Document "${file.name}" uploaded successfully! You can now ask me questions about it.`
-                    }]);
-                    
-                    pushToast("Uploaded");
-                } catch (error) {
-                    console.error('Upload error:', error);
-                    setMessages(prev => [...prev, {
-                        role: "assistant",
-                        text: `Upload failed: ${error.message}`
-                    }]);
-                    pushToast("Upload failed");
-                } finally {
-                    setStatus("IDLE");
-                }
-            }
-
-            function handleDrop(e) { e.preventDefault(); e.stopPropagation(); const file = e.dataTransfer.files && e.dataTransfer.files[0]; if (file) handleUpload(file); }
-            function handleBrowse(e) { const f = e.target.files && e.target.files[0]; if (f) handleUpload(f); }
-
-            async function sendMessage() {
-                if (!chatInput.trim() || !vectorStoreId) return;
-                
-                const text = chatInput.trim();
-                const newMessages = [...messages, { role: "user", text }];
-                setMessages(newMessages);
-                setChatInput("");
-                setStatus("THINKING");
-                
-                try {
-                    const response = await chatWithDoc(newMessages, vectorStoreId);
-                    setMessages(prev => [...prev, { role: "assistant", text: response }]);
-                } catch (error) {
-                    setMessages(prev => [...prev, { 
-                        role: "assistant", 
-                        text: `Error: ${error.message}` 
-                    }]);
-                } finally {
-                    setStatus("IDLE");
-                }
-            }
-
-            const actions = useMemo(() => {
-                return [
-                    { id: "theme", label: "Toggle theme", kbd: "⌘/", icon: <SunMedium size={16} />, onSelect: () => setDark((d) => !d) },
-                    { id: "upload", label: "Upload file…", kbd: "U", icon: <Upload size={16} />, onSelect: () => fileInputRef.current?.click() },
-                    { id: "focus-find", label: "Focus Find", kbd: "⌘F", icon: <Search size={16} />, onSelect: () => document.querySelector("input[placeholder='Find text…']")?.focus() },
-                    { id: "prev", label: "Previous page", kbd: "←", icon: <ChevronLeft size={16} />, onSelect: () => setPage((p) => Math.max(1, p - 1)) },
-                    { id: "next", label: "Next page", kbd: "→", icon: <ChevronRight size={16} />, onSelect: () => setPage((p) => Math.min(pages, p + 1)) },
-                    ...Object.entries(PALETTES).map(([key, p]) => ({ id: `palette-${key}`, label: `Palette: ${p.name || key}`, icon: <div className="size-4 rounded-full" style={{ backgroundImage: `linear-gradient(90deg, ${p.from}, ${p.via}, ${p.to})` }} />, onSelect: () => setBrand(p) })),
-                ];
-            }, [pages]);
-
-            const progress = pages > 1 ? ((page - 1) / (pages - 1)) * 100 : 0;
-
-            return (
-                <div className={`${t.text}`}>
-                    <div className={`h-screen overflow-hidden ${t.softBg}`}>
-                        <div className="flex h-full flex-col">
-                            <header className={`shrink-0 backdrop-blur ${t.headerBlurBg} border-b ${t.border}`}>
-                                <div className="mx-auto max-w-[1400px] px-4">
-                                    <div className="flex h-12 items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-7 w-7 rounded-xl" style={gradStyle} />
-                                            <div className="font-semibold tracking-tight text-sm sm:text-base">
-                                                <span className="bg-clip-text text-transparent" style={gradStyle}>DocumentsGPT</span>
-                                                <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${t.border}`}>v5</span>
-                                            </div>
-                                        </div>
-                                        <div className="hidden md:flex items-center gap-2">
-                                            <div className={`px-2 py-1 rounded-full text-[11px] border ${t.border} ${t.chipBg} flex items-center gap-1`}>
-                                                <Sparkles size={12} /> GPT‑4o
-                                            </div>
-                                            <div className="ml-2 hidden sm:flex items-center gap-2">
-                                                {Object.entries(PALETTES).map(([key, p]) => (
-                                                    <button
-                                                        key={key}
-                                                        aria-label={`Use ${p.name || key} palette`}
-                                                        title={`${p.name || key}`}
-                                                        onClick={() => setBrand(p)}
-                                                        className={`size-4 rounded-full border ${t.border} hover:scale-105 transition-transform`}
-                                                        style={{ backgroundImage: `linear-gradient(90deg, ${p.from}, ${p.via}, ${p.to})` }}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => setShowCmd(true)}
-                                                className={`hidden sm:inline-flex items-center gap-2 rounded-lg px-3 py-1 text-[13px] border ${t.chipBorder} ${t.chipBg}`}
-                                                aria-label="Command palette"
-                                            >
-                                                <CmdKey size={14} /> <span>⌘K</span>
-                                            </button>
-                                            <button
-                                                onClick={() => setDark((d) => !d)}
-                                                className={`inline-flex items-center gap-2 rounded-lg px-3 py-1 text-[13px] border ${t.chipBorder} ${t.chipBg}`}
-                                                aria-label="Toggle theme"
-                                            >
-                                                {dark ? <SunMedium size={14} /> : <Moon size={14} />}<span>{dark ? "Light" : "Dark"}</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </header>
-
-                            <main className="flex-1 min-h-0">
-                                <div className="mx-auto h-full max-w-[1400px] px-2 sm:px-4 py-3">
-                                    <PanelGroup direction="horizontal" className="h-full" autoSaveId="dgpt-panels-v3">
-                                        <Panel defaultSize={18} minSize={12} order={1}>
-                                            <aside className={`flex h-full flex-col rounded-2xl ${t.panelBg} border ${t.border} shadow-sm ${t.ring}`}>
-                                                <div className="p-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <h3 className="text-sm font-semibold">Upload</h3>
-                                                        <button
-                                                            onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                                                            className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90"
-                                                            style={gradStyle}
-                                                        >
-                                                            <Upload size={16} /> Browse
-                                                        </button>
-                                                        <input ref={fileInputRef} type="file" className="hidden" onChange={handleBrowse} />
-                                                    </div>
-                                                </div>
-                                                <Divider className={t.divider} />
-                                                <div className="p-3 flex-1 min-h-0 overflow-y-auto">
-                                                    <h4 className={`text-[11px] font-semibold uppercase tracking-wider ${t.subtext}`}>Recent</h4>
-                                                    <div className="mt-2 space-y-2">
-                                                        {recents.map((r, i) => (
-                                                            <button key={i} className={`group w-full text-left rounded-xl px-3 py-2 border ${t.border} ${t.hover}`}>
-                                                                <div className="flex items-center gap-2">
-                                                                    <FileText size={16} className={t.muted} />
-                                                                    <div>
-                                                                        <div className="text-sm font-medium">{r.title}</div>
-                                                                        <div className={`text-xs ${t.subtext}`}>{r.time}</div>
-                                                                    </div>
-                                                                    <ChevronRight className={`ml-auto size-4 ${t.subtext}`} />
-                                                                </div>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </aside>
-                                        </Panel>
-
-                                        <PanelResizeHandle className={`mx-1 w-1.5 rounded-full transition-colors ${dark ? "bg-slate-800 hover:bg-slate-700" : "bg-slate-200 hover:bg-slate-300"}`} />
-
-                                        <Panel defaultSize={50} minSize={32} order={2}>
-                                            <section className="h-full min-h-0 flex flex-col gap-2.5">
-                                                <div className={`shrink-0 rounded-2xl border ${t.border} ${t.panelBg} shadow-sm ${t.ring}`}>
-                                                    <div className="flex items-center gap-1.5 overflow-x-auto px-2 py-1">
-                                                        {docs.map((d) => (
-                                                            <button key={d.id} onClick={() => setActiveId(d.id)} className={`group flex items-center gap-2 rounded-lg px-3 py-1.5 border ${t.border} ${t.chipBg} ${d.id === activeId ? "ring-1 ring-indigo-400" : ""}`}>
-                                                                <span className="truncate max-w-[160px] text-sm">{d.name}</span>
-                                                                {docs.length > 1 && (
-                                                                    <span onClick={(e) => { e.stopPropagation(); closeTab(d.id); }} className="rounded p-0.5 hover:bg-white/20" title="Close tab">
-                                                                        <X size={12} />
-                                                                    </span>
-                                                                )}
-                                                            </button>
-                                                        ))}
-                                                        <button onClick={() => fileInputRef.current?.click()} className={`ml-1 rounded-lg px-2 py-1.5 text-xs border ${t.border} ${t.chipBg} inline-flex items-center gap-1`}>
-                                                            <Plus size={14} /> New
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <div className={`shrink-0 rounded-2xl border ${t.border} ${t.panelBg} shadow-sm ${t.ring}`}>
-                                                    <div className="flex flex-wrap items-center gap-2 p-2.5">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-sm font-semibold truncate max-w-[200px] sm:max-w-[260px]">{fileName}</span>
-                                                            <span className={`text-xs ${t.subtext}`}>•</span>
-                                                            <span className="text-xs">{page} / {pages}</span>
-                                                        </div>
-                                                        <div className="ml-auto flex items-center gap-1.5">
-                                                            <button onClick={() => setPage((p) => Math.max(1, p - 1))} className={`rounded-lg border ${t.border} p-1.5 ${t.hover}`} aria-label="Previous" disabled={page <= 1}>
-                                                                <ChevronLeft size={14} />
-                                                            </button>
-                                                            <button onClick={() => setZoomVal((z) => Math.max(30, z - 10))} className={`rounded-lg border ${t.border} p-1.5 ${t.hover}`} aria-label="Zoom out">
-                                                                <Minus size={14} />
-                                                            </button>
-                                                            <div className="text-xs w-12 text-center">{zoom}%</div>
-                                                            <button onClick={() => setZoomVal((z) => Math.min(300, z + 10))} className={`rounded-lg border ${t.border} p-1.5 ${t.hover}`} aria-label="Zoom in">
-                                                                <Plus size={14} />
-                                                            </button>
-                                                            <button onClick={() => setPage((p) => Math.min(pages, p + 1))} className={`rounded-lg border ${t.border} p-1.5 ${t.hover}`} aria-label="Next" disabled={page >= pages}>
-                                                                <ChevronRight size={14} />
-                                                            </button>
-                                                        </div>
-                                                        <div className={`flex items-center gap-2 rounded-xl border ${t.border} px-2 py-1.5`}>
-                                                            <Search size={14} className={t.subtext} />
-                                                            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Find text…" className={`bg-transparent text-sm outline-none w-40 sm:w-56 ${t.text}`} />
-                                                        </div>
-                                                    </div>
-                                                    <div className="px-2.5 pb-2.5">
-                                                        <div className="relative h-1 w-full rounded-full overflow-hidden bg-white/40">
-                                                            <div className="absolute inset-y-0 left-0" style={{ width: `${progress}%`, ...gradStyle }} />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className={`flex-1 min-h-0 grid grid-cols-12 gap-2.5 rounded-2xl p-2.5 border ${t.border} ${t.panelBg} shadow-sm ${t.ring}`} onDragOver={(e) => { e.preventDefault(); }} onDrop={handleDrop}>
-                                                    <div className="hidden md:block col-span-3 lg:col-span-2 min-h-0">
-                                                        <div className={`text-[11px] px-1 pb-1 ${t.subtext}`}>Thumbnails</div>
-                                                        <Divider className={t.divider} />
-                                                        <div className="p-2 space-y-2 overflow-y-auto max-h-full">
-                                                            {[...Array(pages)].map((_, i) => (
-                                                                <button key={i} onClick={() => setPage(i + 1)} className={`w-full rounded-lg border ${t.border} aspect-[3/4] grid place-items-center text-xs ${page === i + 1 ? "ring-1 ring-indigo-400" : ""}`}>
-                                                                    Pg {i + 1}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="col-span-12 md:col-span-9 lg:col-span-10 min-h-0">
-                                                        <div ref={viewerRef} className={`relative h-full w-full rounded-xl border ${t.dashed} overflow-y-auto ${t.pageBg}`}>
-                                                            <div className="p-4 md:p-6 lg:p-8 space-y-4">
-                                                                {[...Array(pages)].map((_, i) => (
-                                                                    <div key={i} ref={(el) => (pageRefs.current[i] = el)} className={`mx-auto w-full max-w-[860px] rounded-lg border ${t.border} bg-white/95 text-slate-900 shadow-sm`} style={{ transform: `scale(${zoom / 110})`, transformOrigin: "top center" }}>
-                                                                        <div className="h-[900px] grid place-items-center text-slate-400 text-sm">Page {i + 1} (mock)</div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </section>
-                                        </Panel>
-
-                                        <PanelResizeHandle className={`mx-1 w-1.5 rounded-full transition-colors ${dark ? "bg-slate-800 hover:bg-slate-700" : "bg-slate-200 hover:bg-slate-300"}`} />
-
-                                        <Panel defaultSize={32} minSize={22} order={3}>
-                                            <aside className={`flex h-full flex-col rounded-2xl ${t.panelBg} border ${t.border} shadow-sm ${t.ring}`}>
-                                                <div className="flex items-center justify-between p-3">
-                                                    <div className={`px-2 py-1 rounded-full text-[11px] border ${t.border} ${t.chipBg} flex items-center gap-1`}>
-                                                        <Sparkles size={12} /> GPT‑4o
-                                                    </div>
-                                                    <div className={`text-[11px] ${t.subtext}`}>Status: <span className="text-emerald-500">{status}</span></div>
-                                                </div>
-                                                <Divider className={t.divider} />
-
-                                                <div className="p-3 flex flex-wrap gap-2">
-                                                    {["Summarize the document", "What are the key points?", "Any important dates or numbers?", "List all totals with currency"].map((s, i) => (
-                                                        <Chip key={i} onClick={() => setChatInput(s)} className={`${t.chipBorder} ${t.chipBg}`}>{s}</Chip>
-                                                    ))}
-                                                </div>
-                                                <Divider className={t.divider} />
-
-                                                <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                                                    {messages.map((m, i) => (
-                                                        <Message key={i} role={m.role} text={m.text} gradStyle={gradStyle} bubbleLight={t.bubbleLight} bubbleDark={t.bubbleDark} />
-                                                    ))}
-                                                </div>
-
-                                                <Divider className={t.divider} />
-                                                <div className="p-3">
-                                                    <div className={`flex items-center gap-2 rounded-xl border ${t.border} ${t.fieldBg} px-2 py-2`}>
-                                                        <button className={`p-2 rounded-lg ${t.hover}`} aria-label="Attach"><Paperclip size={16} /></button>
-                                                        <input
-                                                            value={chatInput}
-                                                            onChange={(e) => setChatInput(e.target.value)}
-                                                            placeholder={vectorStoreId ? "Ask anything…" : "Upload a document first"}
-                                                            className={`flex-1 bg-transparent outline-none text-sm ${t.text}`}
-                                                            disabled={!vectorStoreId}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === "Enter" && !e.shiftKey) {
-                                                                    e.preventDefault();
-                                                                    sendMessage();
-                                                                }
-                                                            }}
-                                                        />
-                                                        <button onClick={() => setRecording((r) => !r)} className={`rounded-lg p-2 text-xs border ${t.border} ${t.hover}`} title={recording ? "Stop voice" : "Start voice"}>{recording ? <Pause size={16} /> : <Play size={16} />}</button>
-                                                        <button
-                                                            onClick={sendMessage}
-                                                            disabled={!vectorStoreId || !chatInput.trim()}
-                                                            className="rounded-lg px-3 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
-                                                            style={gradStyle}
-                                                        >
-                                                            <Send size={16} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </aside>
-                                        </Panel>
-                                    </PanelGroup>
-                                </div>
-                            </main>
-                        </div>
-                    </div>
-
-                    <CommandMenu open={showCmd} onClose={() => setShowCmd(false)} actions={actions} t={t} />
-                    <Toasts toasts={toasts} remove={removeToast} t={t} />
-                </div>
-            );
+        const result = await response.json();
+        loadingMsg.remove();
+        
+        if (response.ok) {
+          pushMsg(result.response, 'bot');
+        } else {
+          pushMsg('❌ Error: ' + result.error, 'bot');
         }
+      } catch (error) {
+        loadingMsg.remove();
+        pushMsg('❌ Chat failed: ' + error.message, 'bot');
+      }
+    }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<DocumentsGPTVibe />);
-    </script>
+    $('#sendBtn').addEventListener('click', handleSend);
+    $('#composer').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); handleSend(); }});
+
+    // Palette
+    const palette = $('#palette');
+    const openPalette = () => { palette.classList.add('show'); $('#paletteInput').focus(); }
+    const closePalette = () => { palette.classList.remove('show'); }
+
+    $('#globalSearch').addEventListener('focus', openPalette);
+    document.addEventListener('keydown', e=>{
+      const k = (e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='k';
+      if(k){ e.preventDefault(); openPalette(); }
+      if(e.key==='Escape') closePalette();
+    });
+    palette.addEventListener('click', e=>{ if(e.target===palette) closePalette(); });
+    $('#paletteItems').addEventListener('click', e=>{
+      const row = e.target.closest('.row'); if(!row) return; const cmd=row.dataset.cmd; closePalette();
+      switch(cmd){
+        case 'upload': fileInput.click(); break;
+        case 'summarize': $('#composer').value = 'Summarize this document'; handleSend(); break;
+        case 'keypoints': $('#composer').value = 'What are the key points?'; handleSend(); break;
+        case 'numbers': $('#composer').value = 'List all totals with currency and dates'; handleSend(); break;
+        case 'theme': $('#themeBtn').click(); break;
+        case 'zen': $('#zenBtn').click(); break;
+        case 'newtab': $('#addTab').click(); break;
+        case 'share': shareActive(); break;
+      }
+    });
+
+    // Share (mock)
+    function shareActive(){
+      const active = $('#tabs .tab.active');
+      toast('Share link created for: ' + (active ? active.textContent.replace('✕','').trim() : 'current tab'));
+    }
+    $('#shareBtn').addEventListener('click', shareActive);
+
+    // Clear chat
+    $('#clearChat').addEventListener('click', ()=>{ 
+      $('#msgs').innerHTML = '<div class="msg bot">Upload a document to start analyzing it. I can summarize, extract key information, and answer questions about your documents.</div>';
+    });
+
+    // Toasts
+    let toastTimer; function toast(text){
+      let el = $('#toast');
+      if(!el){
+        el = document.createElement('div'); el.id='toast';
+        el.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);padding:.6rem .8rem;border-radius:12px;border:1px solid var(--border);background:linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.55));backdrop-filter:blur(8px);box-shadow:var(--shadow-1);z-index:999;';
+        document.body.appendChild(el);
+      }
+      el.textContent = text; el.style.display='block'; clearTimeout(toastTimer); toastTimer = setTimeout(()=> el.style.display='none', 1800);
+    }
+
+    // Accessibility: focus ring
+    document.addEventListener('keydown', e=>{ if(e.key==='Tab'){ document.body.classList.add('show-focus'); }});
+  </script>
 </body>
 </html>

@@ -1,1 +1,0 @@
-Phase 2 scale foundation test. This document tests multi-tenant authentication.

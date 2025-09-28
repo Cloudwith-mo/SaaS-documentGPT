@@ -1,1 +1,0 @@
-This is a comprehensive test document for DocumentGPT. Microsoft Azure provides cloud computing services including virtual machines, databases, and AI services. The document contains multiple paragraphs to test chunking and indexing. Azure supports various programming languages and frameworks. Users can deploy applications globally using Azure's data centers.

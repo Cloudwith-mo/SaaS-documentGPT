@@ -1,4 +1,0 @@
-{
-  "httpMethod": "POST",
-  "body": "{\"filename\":\"test.txt\",\"contentType\":\"text/plain\"}"
-}

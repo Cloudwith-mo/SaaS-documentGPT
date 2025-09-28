@@ -1,8 +1,0 @@
-{
-  "httpMethod": "POST",
-  "headers": {
-    "x-api-key": "dk-test-key-123",
-    "x-user-id": "test"
-  },
-  "body": "{\"filename\":\"test.txt\",\"contentType\":\"text/plain\"}"
-}

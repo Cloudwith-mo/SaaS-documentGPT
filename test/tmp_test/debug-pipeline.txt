@@ -1,1 +1,0 @@
-Debug test document for pipeline verification. Microsoft Azure provides cloud computing services.

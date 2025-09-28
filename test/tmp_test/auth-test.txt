@@ -1,1 +1,0 @@
-Authenticated test document for DocumentGPT. Microsoft provides cloud computing services through Azure.

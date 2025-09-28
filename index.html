@@ -3,237 +3,692 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocumentGPT - AI Document Assistant</title>
+    <title>DocumentsGPT - Enhanced UI</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/framer-motion@10/dist/framer-motion.js"></script>
+    <script src="https://unpkg.com/react-resizable-panels@0.0.55/dist/index.umd.js"></script>
+    <script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; }
-        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
-        .header { text-align: center; margin-bottom: 30px; }
-        .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
-        .upload-area { border: 2px dashed #e9ecef; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; }
-        .upload-area:hover { border-color: #007bff; background: #f8f9ff; }
-        .upload-area.dragover { border-color: #007bff; background: #e3f2fd; }
-        .btn { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; transition: background 0.2s; }
-        .btn:hover { background: #0056b3; }
-        .btn:disabled { background: #6c757d; cursor: not-allowed; }
-        .status { margin: 15px 0; padding: 12px; border-radius: 8px; }
-        .success { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
-        .error { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
-        .loading { background: #fff3cd; color: #856404; border-left: 4px solid #ffc107; }
-        .chat-input { width: 100%; padding: 16px; border: 1px solid #dee2e6; border-radius: 8px; resize: vertical; min-height: 100px; font-size: 16px; }
-        .chat-history { max-height: 500px; overflow-y: auto; margin-bottom: 20px; }
-        .message { margin: 15px 0; padding: 16px; border-radius: 12px; }
-        .user-message { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-left: 60px; }
-        .ai-message { background: #f8f9fa; border: 1px solid #e9ecef; margin-right: 60px; }
-        .file-info { background: #e3f2fd; padding: 12px; border-radius: 6px; margin: 10px 0; font-size: 14px; }
-        .controls { display: flex; gap: 10px; align-items: center; }
-    </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>📄 DocumentGPT</h1>
-            <p>AI-powered document assistant with OpenAI integration</p>
-        </div>
+    <div id="root"></div>
 
-        <div class="card">
-            <h2>📤 Upload Document</h2>
-            <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
-                <input type="file" id="fileInput" style="display: none" accept=".pdf,.txt,.docx,.md" onchange="handleFileSelect(event)">
-                <div>
-                    <strong>Click to upload</strong> or drag and drop<br>
-                    <small>Supports: PDF, TXT, DOCX, MD</small>
-                </div>
-            </div>
-            <div style="margin-top: 15px;">
-                <button onclick="uploadFile()" class="btn" id="uploadBtn" disabled>Upload & Index</button>
-            </div>
-            <div id="uploadStatus"></div>
-            <div id="fileInfo"></div>
-        </div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { motion, AnimatePresence } = Motion;
+        const { Panel, PanelGroup, PanelResizeHandle } = ReactResizablePanels;
+        const { 
+            Upload, FileText, Plus, Minus, Search, Paperclip, Send, 
+            SunMedium, Moon, ChevronRight, Sparkles, Bot, User, Play, Pause,
+            Command: CmdKey, X, Check, ChevronLeft
+        } = LucideReact;
 
-        <div class="card">
-            <h2>💬 Chat with Document</h2>
-            <div id="chatHistory" class="chat-history"></div>
-            <div class="controls">
-                <textarea id="chatInput" class="chat-input" placeholder="Ask questions about your document or say 'email me a summary'..."></textarea>
-            </div>
-            <div style="margin-top: 15px;">
-                <button onclick="sendMessage()" class="btn" id="sendBtn">Send Message</button>
-                <button onclick="clearChat()" class="btn" style="background: #6c757d; margin-left: 10px;">Clear Chat</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
         const API_BASE = 'https://i1dy8i3692.execute-api.us-east-1.amazonaws.com/prod';
-        let currentVectorStoreId = null;
-        let selectedFile = null;
 
-        const uploadArea = document.getElementById('uploadArea');
-        
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-        
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-        
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                selectedFile = files[0];
-                updateFileInfo();
-                document.getElementById('uploadBtn').disabled = false;
-            }
-        });
+        const PALETTES = {
+            sapphire: { from: "#2563eb", via: "#1e40af", to: "#06b6d4", name: "Sapphire" },
+            emerald: { from: "#10b981", via: "#0d9488", to: "#22c55e", name: "Emerald" },
+            violet: { from: "#7c3aed", via: "#9333ea", to: "#a855f7", name: "Violet" },
+            amber: { from: "#f59e0b", via: "#f97316", to: "#facc15", name: "Amber" },
+            crimson: { from: "#ef4444", via: "#e11d48", to: "#fb923c", name: "Crimson" },
+        };
 
-        function handleFileSelect(event) {
-            selectedFile = event.target.files[0];
-            updateFileInfo();
-            document.getElementById('uploadBtn').disabled = false;
+        function Chip({ children, onClick, className = "" }) {
+            return (
+                <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    whileHover={{ y: -1 }}
+                    onClick={onClick}
+                    className={`px-2.5 py-1.5 rounded-full text-[13px] border hover:shadow-sm transition-colors ${className}`}
+                >
+                    {children}
+                </motion.button>
+            );
         }
 
-        function updateFileInfo() {
-            const fileInfo = document.getElementById('fileInfo');
-            if (selectedFile) {
-                fileInfo.innerHTML = `
-                    <div class="file-info">
-                        📄 <strong>${selectedFile.name}</strong> (${(selectedFile.size / 1024).toFixed(1)} KB)
+        function Divider({ className = "" }) {
+            return <div className={`h-px ${className}`} />;
+        }
+
+        function Message({ role, text, gradStyle, bubbleLight, bubbleDark }) {
+            const isUser = role === "user";
+            return (
+                <div className={`flex w-full gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
+                    {!isUser && (
+                        <div className={`size-7 rounded-full grid place-items-center ${bubbleLight}`}>
+                            <Bot size={16} />
+                        </div>
+                    )}
+                    <div
+                        className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed shadow-sm ${
+                            isUser ? "text-white" : bubbleDark
+                        }`}
+                        style={isUser ? { ...gradStyle } : undefined}
+                    >
+                        {text}
                     </div>
-                `;
-            }
+                    {isUser && (
+                        <div className={`size-7 rounded-full grid place-items-center ${bubbleLight}`}>
+                            <User size={16} />
+                        </div>
+                    )}
+                </div>
+            );
         }
 
-        async function uploadFile() {
-            if (!selectedFile) {
-                showStatus('uploadStatus', 'Please select a file', 'error');
-                return;
-            }
-
-            const uploadBtn = document.getElementById('uploadBtn');
-            uploadBtn.disabled = true;
-            uploadBtn.textContent = 'Uploading...';
-            
-            showStatus('uploadStatus', '📤 Uploading to AI system...', 'loading');
-
-            try {
-                const fileContent = await fileToBase64(selectedFile);
-                
-                const response = await fetch(`${API_BASE}/upload`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        filename: selectedFile.name,
-                        file_content: fileContent.split(',')[1],
-                        user_id: 'web-user'
-                    })
-                });
-
-                const result = await response.json();
-                
-                if (response.ok) {
-                    currentVectorStoreId = result.vector_store_id;
-                    showStatus('uploadStatus', `✅ ${result.message}`, 'success');
-                    document.getElementById('sendBtn').disabled = false;
-                } else {
-                    showStatus('uploadStatus', `❌ ${result.error}`, 'error');
-                }
-            } catch (error) {
-                showStatus('uploadStatus', `❌ Upload failed: ${error.message}`, 'error');
-            } finally {
-                uploadBtn.disabled = false;
-                uploadBtn.textContent = 'Upload & Index';
-            }
+        function Toasts({ toasts, remove, t }) {
+            return (
+                <div className="pointer-events-none fixed inset-x-0 bottom-3 z-[60] flex justify-center">
+                    <div className="space-y-2">
+                        <AnimatePresence>
+                            {toasts.map((toast) => (
+                                <motion.div
+                                    key={toast.id}
+                                    initial={{ opacity: 0, y: 6 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 6 }}
+                                    className={`pointer-events-auto rounded-xl border ${t.border} ${t.fieldBg} backdrop-blur px-3.5 py-2 shadow-lg`}
+                                >
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Check size={14} className="text-emerald-500" />
+                                        <span>{toast.text}</span>
+                                        <button
+                                            onClick={() => remove(toast.id)}
+                                            className="ml-2 p-1 rounded hover:bg-white/20"
+                                            aria-label="Close toast"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
+                    </div>
+                </div>
+            );
         }
 
-        async function sendMessage() {
-            const chatInput = document.getElementById('chatInput');
-            const message = chatInput.value.trim();
-            
-            if (!message) return;
+        function CommandMenu({ open, onClose, actions, t }) {
+            const [query, setQuery] = useState("");
+            const list = useMemo(() => {
+                const q = query.trim().toLowerCase();
+                return q ? actions.filter((a) => a.label.toLowerCase().includes(q)) : actions;
+            }, [query, actions]);
 
-            addMessage(message, 'user');
-            chatInput.value = '';
+            useEffect(() => {
+                function onKey(e) { if (e.key === "Escape") onClose(); }
+                if (open) window.addEventListener("keydown", onKey);
+                return () => window.removeEventListener("keydown", onKey);
+            }, [open, onClose]);
 
-            const loadingId = addMessage('🤔 Processing...', 'ai');
-            document.getElementById('sendBtn').disabled = true;
-
-            try {
-                const messages = [{ role: 'user', content: message }];
-                
-                const response = await fetch(`${API_BASE}/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        messages: messages,
-                        vector_store_id: currentVectorStoreId,
-                        user_email: 'user@documentgpt.io'
-                    })
-                });
-
-                const result = await response.json();
-                
-                document.getElementById(loadingId).remove();
-                
-                if (response.ok) {
-                    addMessage(result.response, 'ai');
-                } else {
-                    addMessage(`❌ Error: ${result.error}`, 'ai');
-                }
-            } catch (error) {
-                document.getElementById(loadingId).remove();
-                addMessage(`❌ Chat failed: ${error.message}`, 'ai');
-            } finally {
-                document.getElementById('sendBtn').disabled = false;
-            }
+            return (
+                <AnimatePresence>
+                    {open && (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70]" aria-modal role="dialog">
+                            <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.98, y: 6 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.98, y: 6 }}
+                                transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                                className={`absolute left-1/2 top-16 w-[92vw] max-w-xl -translate-x-1/2 rounded-2xl border ${t.border} ${t.panelBg} shadow-xl`}
+                            >
+                                <div className="flex items-center gap-2 p-2">
+                                    <CmdKey size={16} className="opacity-70 ml-1" />
+                                    <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Type a command… (e.g., theme, upload, palette)" className={`flex-1 bg-transparent outline-none px-2 py-2 text-sm`} />
+                                    <button onClick={onClose} className={`rounded-lg px-2 py-1 text-xs border ${t.border}`}>Esc</button>
+                                </div>
+                                <Divider className={t.divider} />
+                                <div className="max-h-[50vh] overflow-y-auto p-2">
+                                    {list.map((a) => (
+                                        <button key={a.id} onClick={() => { a.onSelect?.(); onClose(); }} className={`w-full text-left px-3 py-2 rounded-xl border ${t.border} hover:bg-white/5`}>
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="flex items-center gap-2">{a.icon}<span className="text-sm font-medium">{a.label}</span></div>
+                                                {a.kbd && <span className="text-[10px] opacity-70">{a.kbd}</span>}
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {list.length === 0 && (<div className="p-4 text-sm opacity-70">No matches. Try "palette" or "upload".</div>)}
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            );
         }
 
-        function addMessage(text, sender) {
-            const chatHistory = document.getElementById('chatHistory');
-            const messageDiv = document.createElement('div');
-            const messageId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-            
-            messageDiv.id = messageId;
-            messageDiv.className = `message ${sender}-message`;
-            messageDiv.textContent = text;
-            
-            chatHistory.appendChild(messageDiv);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-            
-            return messageId;
-        }
-
-        function clearChat() {
-            document.getElementById('chatHistory').innerHTML = '';
-        }
-
-        function showStatus(elementId, message, type) {
-            const statusDiv = document.getElementById(elementId);
-            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
-        }
-
-        function fileToBase64(file) {
+        // API Functions
+        async function uploadFile(file) {
+            const reader = new FileReader();
             return new Promise((resolve, reject) => {
-                const reader = new FileReader();
+                reader.onload = async () => {
+                    try {
+                        const base64Content = reader.result.split(',')[1];
+                        const response = await fetch(`${API_BASE}/upload`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                filename: file.name,
+                                file_content: base64Content,
+                                user_id: 'web-user'
+                            })
+                        });
+                        
+                        if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
+                        const data = await response.json();
+                        resolve({
+                            vectorStoreId: data.vector_store_id,
+                            fileId: data.file_id,
+                            fileName: file.name
+                        });
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
                 reader.readAsDataURL(file);
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = error => reject(error);
             });
         }
 
-        // Enter key support for chat
-        document.getElementById('chatInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
+        async function chatWithDoc(messages, vectorStoreId) {
+            const response = await fetch(`${API_BASE}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages,
+                    vector_store_id: vectorStoreId
+                })
+            });
+            
+            if (!response.ok) throw new Error(`Chat failed: ${response.status}`);
+            const data = await response.json();
+            return data.response || 'No response received';
+        }
+
+        function DocumentsGPTVibe() {
+            const [dark, setDark] = useState(() => {
+                try {
+                    const s = typeof localStorage !== "undefined" ? localStorage.getItem("dgpt:theme") : null;
+                    return s === "dark";
+                } catch {
+                    return false;
+                }
+            });
+
+            // Tabs state
+            const initIdRef = useRef(null);
+            if (initIdRef.current === null) initIdRef.current = uid();
+            const [docs, setDocs] = useState(() => [{ id: initIdRef.current, name: "Sample.pdf", pages: 6, page: 1, zoom: 110 }]);
+            const [activeId, setActiveId] = useState(() => initIdRef.current);
+
+            const activeDoc = useMemo(() => docs.find((d) => d.id === activeId) || docs[0], [docs, activeId]);
+            const fileName = activeDoc?.name || "Untitled.pdf";
+            const pages = activeDoc?.pages || 0;
+            const page = activeDoc?.page || 1;
+            const zoom = activeDoc?.zoom || 110;
+
+            const [searchTerm, setSearchTerm] = useState("");
+            const [chatInput, setChatInput] = useState("");
+            const [messages, setMessages] = useState([{ role: "assistant", text: "Start chatting about your document. I can summarize, extract totals, and hunt for dates." }]);
+            const [recording, setRecording] = useState(false);
+            const [status, setStatus] = useState("IDLE");
+            const [brand, setBrand] = useState(PALETTES.sapphire);
+            const [vectorStoreId, setVectorStoreId] = useState(null);
+            const [recents, setRecents] = useState([
+                { title: "AI assistant", time: "2h ago" },
+                { title: "Q3 review", time: "2h ago" },
+                { title: "Contract QA", time: "2h ago" },
+            ]);
+            const [showCmd, setShowCmd] = useState(false);
+            const [toasts, setToasts] = useState([]);
+
+            const gradStyle = useMemo(
+                () => ({ backgroundImage: `linear-gradient(90deg, ${brand.from}, ${brand.via}, ${brand.to})` }),
+                [brand]
+            );
+
+            const t = useMemo(() => {
+                return dark
+                    ? {
+                        text: "text-slate-100",
+                        subtext: "text-slate-400",
+                        muted: "text-slate-300",
+                        softBg: "bg-gradient-to-b from-slate-950 to-slate-900",
+                        panelBg: "bg-gradient-to-b from-slate-950 to-slate-900",
+                        pageBg: "bg-slate-950",
+                        border: "border-slate-800",
+                        ring: "ring-1 ring-slate-600/30",
+                        hover: "hover:bg-slate-900",
+                        chipBg: "bg-slate-900/40",
+                        chipBorder: "border-slate-700",
+                        bubbleLight: "bg-slate-800/40 text-slate-200",
+                        bubbleDark: "bg-slate-900/70 border border-slate-800",
+                        divider: "bg-slate-800",
+                        headerBlurBg: "supports-[backdrop-filter]:bg-slate-950/50",
+                        fieldBg: "bg-slate-950/60",
+                        statusGreen: "text-green-400",
+                        dashed: "border-dashed border-slate-700",
+                    }
+                    : {
+                        text: "text-slate-900",
+                        subtext: "text-slate-500",
+                        muted: "text-slate-600",
+                        softBg: "bg-gradient-to-b from-white to-slate-50",
+                        panelBg: "bg-gradient-to-b from-white to-slate-50",
+                        pageBg: "bg-white",
+                        border: "border-slate-200",
+                        ring: "ring-1 ring-slate-300/50",
+                        hover: "hover:bg-slate-100",
+                        chipBg: "bg-white/60",
+                        chipBorder: "border-slate-200",
+                        bubbleLight: "bg-slate-200/40 text-slate-600",
+                        bubbleDark: "bg-white/80 border border-slate-200",
+                        divider: "bg-slate-200",
+                        headerBlurBg: "supports-[backdrop-filter]:bg-white/60",
+                        fieldBg: "bg-white/70",
+                        statusGreen: "text-green-600",
+                        dashed: "border-dashed border-slate-300",
+                    };
+            }, [dark]);
+
+            const fileInputRef = useRef(null);
+            const viewerRef = useRef(null);
+            const pageRefs = useRef([]);
+
+            useEffect(() => {
+                try { localStorage.setItem("dgpt:theme", dark ? "dark" : "light"); } catch {}
+            }, [dark]);
+
+            useEffect(() => {
+                const el = pageRefs.current[page - 1];
+                if (el && viewerRef.current) {
+                    el.scrollIntoView({ behavior: "smooth", block: "start" });
+                }
+            }, [page]);
+
+            useEffect(() => {
+                pageRefs.current = [];
+                if (viewerRef.current) viewerRef.current.scrollTop = 0;
+            }, [activeId]);
+
+            useEffect(() => {
+                function onKey(e) {
+                    const k = e.key.toLowerCase();
+                    if ((e.ctrlKey || e.metaKey) && k === "/") {
+                        e.preventDefault();
+                        setDark((d) => !d);
+                        pushToast("Theme toggled");
+                    }
+                    if ((e.ctrlKey || e.metaKey) && k === "f") {
+                        e.preventDefault();
+                        const el = document.querySelector("input[placeholder='Find text…']");
+                        if (el) el.focus();
+                    }
+                    if ((e.ctrlKey || e.metaKey) && k === "k") {
+                        e.preventDefault();
+                        setShowCmd(true);
+                    }
+                }
+                window.addEventListener("keydown", onKey);
+                return () => window.removeEventListener("keydown", onKey);
+            }, []);
+
+            function pushToast(text) {
+                const id = Date.now() + Math.random();
+                setToasts((tq) => [...tq, { id, text }]);
+                setTimeout(() => removeToast(id), 2000);
             }
-        });
+            function removeToast(id) {
+                setToasts((tq) => tq.filter((t) => t.id !== id));
+            }
+
+            function uid() {
+                return Math.random().toString(36).slice(2) + Date.now().toString(36);
+            }
+
+            function setPage(next) {
+                setDocs((prev) => prev.map((d) => d.id === activeId ? { ...d, page: clampPage(d, typeof next === "function" ? next(d.page) : next) } : d));
+            }
+            function setZoomVal(next) {
+                setDocs((prev) => prev.map((d) => d.id === activeId ? { ...d, zoom: clampZoom(typeof next === "function" ? next(d.zoom) : next) } : d));
+            }
+            function clampPage(d, p) { return Math.max(1, Math.min(d.pages || 1, p)); }
+            function clampZoom(z) { return Math.max(30, Math.min(300, z)); }
+
+            function closeTab(id) {
+                setDocs((prev) => {
+                    if (prev.length <= 1) { pushToast("Can't close the last tab"); return prev; }
+                    const idx = prev.findIndex((d) => d.id === id);
+                    if (idx === -1) return prev;
+                    const nextDocs = prev.filter((d) => d.id !== id);
+                    if (id === activeId) {
+                        const newIdx = Math.max(0, idx - 1);
+                        const newActive = nextDocs[newIdx];
+                        setActiveId(newActive.id);
+                    }
+                    return nextDocs;
+                });
+            }
+
+            async function handleUpload(file) {
+                try {
+                    setStatus("UPLOADING");
+                    const newDoc = { id: uid(), name: file.name, pages: Math.max(3, Math.min(12, Math.ceil(file.size / (220 * 1024)))), page: 1, zoom: 110 };
+                    setDocs((prev) => [...prev, newDoc]);
+                    setActiveId(newDoc.id);
+                    
+                    const result = await uploadFile(file);
+                    setVectorStoreId(result.vectorStoreId);
+                    
+                    const newRecent = { 
+                        title: file.name, 
+                        time: "just now",
+                        vectorStoreId: result.vectorStoreId,
+                        fileName: file.name
+                    };
+                    setRecents(prev => [newRecent, ...prev.filter(r => r.title !== file.name)]);
+                    
+                    setMessages(prev => [...prev, {
+                        role: "assistant",
+                        text: `Document "${file.name}" uploaded successfully! You can now ask me questions about it.`
+                    }]);
+                    
+                    pushToast("Uploaded");
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    setMessages(prev => [...prev, {
+                        role: "assistant",
+                        text: `Upload failed: ${error.message}`
+                    }]);
+                    pushToast("Upload failed");
+                } finally {
+                    setStatus("IDLE");
+                }
+            }
+
+            function handleDrop(e) { e.preventDefault(); e.stopPropagation(); const file = e.dataTransfer.files && e.dataTransfer.files[0]; if (file) handleUpload(file); }
+            function handleBrowse(e) { const f = e.target.files && e.target.files[0]; if (f) handleUpload(f); }
+
+            async function sendMessage() {
+                if (!chatInput.trim() || !vectorStoreId) return;
+                
+                const text = chatInput.trim();
+                const newMessages = [...messages, { role: "user", text }];
+                setMessages(newMessages);
+                setChatInput("");
+                setStatus("THINKING");
+                
+                try {
+                    const response = await chatWithDoc(newMessages, vectorStoreId);
+                    setMessages(prev => [...prev, { role: "assistant", text: response }]);
+                } catch (error) {
+                    setMessages(prev => [...prev, { 
+                        role: "assistant", 
+                        text: `Error: ${error.message}` 
+                    }]);
+                } finally {
+                    setStatus("IDLE");
+                }
+            }
+
+            const actions = useMemo(() => {
+                return [
+                    { id: "theme", label: "Toggle theme", kbd: "⌘/", icon: <SunMedium size={16} />, onSelect: () => setDark((d) => !d) },
+                    { id: "upload", label: "Upload file…", kbd: "U", icon: <Upload size={16} />, onSelect: () => fileInputRef.current?.click() },
+                    { id: "focus-find", label: "Focus Find", kbd: "⌘F", icon: <Search size={16} />, onSelect: () => document.querySelector("input[placeholder='Find text…']")?.focus() },
+                    { id: "prev", label: "Previous page", kbd: "←", icon: <ChevronLeft size={16} />, onSelect: () => setPage((p) => Math.max(1, p - 1)) },
+                    { id: "next", label: "Next page", kbd: "→", icon: <ChevronRight size={16} />, onSelect: () => setPage((p) => Math.min(pages, p + 1)) },
+                    ...Object.entries(PALETTES).map(([key, p]) => ({ id: `palette-${key}`, label: `Palette: ${p.name || key}`, icon: <div className="size-4 rounded-full" style={{ backgroundImage: `linear-gradient(90deg, ${p.from}, ${p.via}, ${p.to})` }} />, onSelect: () => setBrand(p) })),
+                ];
+            }, [pages]);
+
+            const progress = pages > 1 ? ((page - 1) / (pages - 1)) * 100 : 0;
+
+            return (
+                <div className={`${t.text}`}>
+                    <div className={`h-screen overflow-hidden ${t.softBg}`}>
+                        <div className="flex h-full flex-col">
+                            <header className={`shrink-0 backdrop-blur ${t.headerBlurBg} border-b ${t.border}`}>
+                                <div className="mx-auto max-w-[1400px] px-4">
+                                    <div className="flex h-12 items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-7 w-7 rounded-xl" style={gradStyle} />
+                                            <div className="font-semibold tracking-tight text-sm sm:text-base">
+                                                <span className="bg-clip-text text-transparent" style={gradStyle}>DocumentsGPT</span>
+                                                <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${t.border}`}>v5</span>
+                                            </div>
+                                        </div>
+                                        <div className="hidden md:flex items-center gap-2">
+                                            <div className={`px-2 py-1 rounded-full text-[11px] border ${t.border} ${t.chipBg} flex items-center gap-1`}>
+                                                <Sparkles size={12} /> GPT‑4o
+                                            </div>
+                                            <div className="ml-2 hidden sm:flex items-center gap-2">
+                                                {Object.entries(PALETTES).map(([key, p]) => (
+                                                    <button
+                                                        key={key}
+                                                        aria-label={`Use ${p.name || key} palette`}
+                                                        title={`${p.name || key}`}
+                                                        onClick={() => setBrand(p)}
+                                                        className={`size-4 rounded-full border ${t.border} hover:scale-105 transition-transform`}
+                                                        style={{ backgroundImage: `linear-gradient(90deg, ${p.from}, ${p.via}, ${p.to})` }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setShowCmd(true)}
+                                                className={`hidden sm:inline-flex items-center gap-2 rounded-lg px-3 py-1 text-[13px] border ${t.chipBorder} ${t.chipBg}`}
+                                                aria-label="Command palette"
+                                            >
+                                                <CmdKey size={14} /> <span>⌘K</span>
+                                            </button>
+                                            <button
+                                                onClick={() => setDark((d) => !d)}
+                                                className={`inline-flex items-center gap-2 rounded-lg px-3 py-1 text-[13px] border ${t.chipBorder} ${t.chipBg}`}
+                                                aria-label="Toggle theme"
+                                            >
+                                                {dark ? <SunMedium size={14} /> : <Moon size={14} />}<span>{dark ? "Light" : "Dark"}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </header>
+
+                            <main className="flex-1 min-h-0">
+                                <div className="mx-auto h-full max-w-[1400px] px-2 sm:px-4 py-3">
+                                    <PanelGroup direction="horizontal" className="h-full" autoSaveId="dgpt-panels-v3">
+                                        <Panel defaultSize={18} minSize={12} order={1}>
+                                            <aside className={`flex h-full flex-col rounded-2xl ${t.panelBg} border ${t.border} shadow-sm ${t.ring}`}>
+                                                <div className="p-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <h3 className="text-sm font-semibold">Upload</h3>
+                                                        <button
+                                                            onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                                                            className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-white hover:opacity-90"
+                                                            style={gradStyle}
+                                                        >
+                                                            <Upload size={16} /> Browse
+                                                        </button>
+                                                        <input ref={fileInputRef} type="file" className="hidden" onChange={handleBrowse} />
+                                                    </div>
+                                                </div>
+                                                <Divider className={t.divider} />
+                                                <div className="p-3 flex-1 min-h-0 overflow-y-auto">
+                                                    <h4 className={`text-[11px] font-semibold uppercase tracking-wider ${t.subtext}`}>Recent</h4>
+                                                    <div className="mt-2 space-y-2">
+                                                        {recents.map((r, i) => (
+                                                            <button key={i} className={`group w-full text-left rounded-xl px-3 py-2 border ${t.border} ${t.hover}`}>
+                                                                <div className="flex items-center gap-2">
+                                                                    <FileText size={16} className={t.muted} />
+                                                                    <div>
+                                                                        <div className="text-sm font-medium">{r.title}</div>
+                                                                        <div className={`text-xs ${t.subtext}`}>{r.time}</div>
+                                                                    </div>
+                                                                    <ChevronRight className={`ml-auto size-4 ${t.subtext}`} />
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </aside>
+                                        </Panel>
+
+                                        <PanelResizeHandle className={`mx-1 w-1.5 rounded-full transition-colors ${dark ? "bg-slate-800 hover:bg-slate-700" : "bg-slate-200 hover:bg-slate-300"}`} />
+
+                                        <Panel defaultSize={50} minSize={32} order={2}>
+                                            <section className="h-full min-h-0 flex flex-col gap-2.5">
+                                                <div className={`shrink-0 rounded-2xl border ${t.border} ${t.panelBg} shadow-sm ${t.ring}`}>
+                                                    <div className="flex items-center gap-1.5 overflow-x-auto px-2 py-1">
+                                                        {docs.map((d) => (
+                                                            <button key={d.id} onClick={() => setActiveId(d.id)} className={`group flex items-center gap-2 rounded-lg px-3 py-1.5 border ${t.border} ${t.chipBg} ${d.id === activeId ? "ring-1 ring-indigo-400" : ""}`}>
+                                                                <span className="truncate max-w-[160px] text-sm">{d.name}</span>
+                                                                {docs.length > 1 && (
+                                                                    <span onClick={(e) => { e.stopPropagation(); closeTab(d.id); }} className="rounded p-0.5 hover:bg-white/20" title="Close tab">
+                                                                        <X size={12} />
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        ))}
+                                                        <button onClick={() => fileInputRef.current?.click()} className={`ml-1 rounded-lg px-2 py-1.5 text-xs border ${t.border} ${t.chipBg} inline-flex items-center gap-1`}>
+                                                            <Plus size={14} /> New
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className={`shrink-0 rounded-2xl border ${t.border} ${t.panelBg} shadow-sm ${t.ring}`}>
+                                                    <div className="flex flex-wrap items-center gap-2 p-2.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm font-semibold truncate max-w-[200px] sm:max-w-[260px]">{fileName}</span>
+                                                            <span className={`text-xs ${t.subtext}`}>•</span>
+                                                            <span className="text-xs">{page} / {pages}</span>
+                                                        </div>
+                                                        <div className="ml-auto flex items-center gap-1.5">
+                                                            <button onClick={() => setPage((p) => Math.max(1, p - 1))} className={`rounded-lg border ${t.border} p-1.5 ${t.hover}`} aria-label="Previous" disabled={page <= 1}>
+                                                                <ChevronLeft size={14} />
+                                                            </button>
+                                                            <button onClick={() => setZoomVal((z) => Math.max(30, z - 10))} className={`rounded-lg border ${t.border} p-1.5 ${t.hover}`} aria-label="Zoom out">
+                                                                <Minus size={14} />
+                                                            </button>
+                                                            <div className="text-xs w-12 text-center">{zoom}%</div>
+                                                            <button onClick={() => setZoomVal((z) => Math.min(300, z + 10))} className={`rounded-lg border ${t.border} p-1.5 ${t.hover}`} aria-label="Zoom in">
+                                                                <Plus size={14} />
+                                                            </button>
+                                                            <button onClick={() => setPage((p) => Math.min(pages, p + 1))} className={`rounded-lg border ${t.border} p-1.5 ${t.hover}`} aria-label="Next" disabled={page >= pages}>
+                                                                <ChevronRight size={14} />
+                                                            </button>
+                                                        </div>
+                                                        <div className={`flex items-center gap-2 rounded-xl border ${t.border} px-2 py-1.5`}>
+                                                            <Search size={14} className={t.subtext} />
+                                                            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Find text…" className={`bg-transparent text-sm outline-none w-40 sm:w-56 ${t.text}`} />
+                                                        </div>
+                                                    </div>
+                                                    <div className="px-2.5 pb-2.5">
+                                                        <div className="relative h-1 w-full rounded-full overflow-hidden bg-white/40">
+                                                            <div className="absolute inset-y-0 left-0" style={{ width: `${progress}%`, ...gradStyle }} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className={`flex-1 min-h-0 grid grid-cols-12 gap-2.5 rounded-2xl p-2.5 border ${t.border} ${t.panelBg} shadow-sm ${t.ring}`} onDragOver={(e) => { e.preventDefault(); }} onDrop={handleDrop}>
+                                                    <div className="hidden md:block col-span-3 lg:col-span-2 min-h-0">
+                                                        <div className={`text-[11px] px-1 pb-1 ${t.subtext}`}>Thumbnails</div>
+                                                        <Divider className={t.divider} />
+                                                        <div className="p-2 space-y-2 overflow-y-auto max-h-full">
+                                                            {[...Array(pages)].map((_, i) => (
+                                                                <button key={i} onClick={() => setPage(i + 1)} className={`w-full rounded-lg border ${t.border} aspect-[3/4] grid place-items-center text-xs ${page === i + 1 ? "ring-1 ring-indigo-400" : ""}`}>
+                                                                    Pg {i + 1}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="col-span-12 md:col-span-9 lg:col-span-10 min-h-0">
+                                                        <div ref={viewerRef} className={`relative h-full w-full rounded-xl border ${t.dashed} overflow-y-auto ${t.pageBg}`}>
+                                                            <div className="p-4 md:p-6 lg:p-8 space-y-4">
+                                                                {[...Array(pages)].map((_, i) => (
+                                                                    <div key={i} ref={(el) => (pageRefs.current[i] = el)} className={`mx-auto w-full max-w-[860px] rounded-lg border ${t.border} bg-white/95 text-slate-900 shadow-sm`} style={{ transform: `scale(${zoom / 110})`, transformOrigin: "top center" }}>
+                                                                        <div className="h-[900px] grid place-items-center text-slate-400 text-sm">Page {i + 1} (mock)</div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </section>
+                                        </Panel>
+
+                                        <PanelResizeHandle className={`mx-1 w-1.5 rounded-full transition-colors ${dark ? "bg-slate-800 hover:bg-slate-700" : "bg-slate-200 hover:bg-slate-300"}`} />
+
+                                        <Panel defaultSize={32} minSize={22} order={3}>
+                                            <aside className={`flex h-full flex-col rounded-2xl ${t.panelBg} border ${t.border} shadow-sm ${t.ring}`}>
+                                                <div className="flex items-center justify-between p-3">
+                                                    <div className={`px-2 py-1 rounded-full text-[11px] border ${t.border} ${t.chipBg} flex items-center gap-1`}>
+                                                        <Sparkles size={12} /> GPT‑4o
+                                                    </div>
+                                                    <div className={`text-[11px] ${t.subtext}`}>Status: <span className="text-emerald-500">{status}</span></div>
+                                                </div>
+                                                <Divider className={t.divider} />
+
+                                                <div className="p-3 flex flex-wrap gap-2">
+                                                    {["Summarize the document", "What are the key points?", "Any important dates or numbers?", "List all totals with currency"].map((s, i) => (
+                                                        <Chip key={i} onClick={() => setChatInput(s)} className={`${t.chipBorder} ${t.chipBg}`}>{s}</Chip>
+                                                    ))}
+                                                </div>
+                                                <Divider className={t.divider} />
+
+                                                <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                                                    {messages.map((m, i) => (
+                                                        <Message key={i} role={m.role} text={m.text} gradStyle={gradStyle} bubbleLight={t.bubbleLight} bubbleDark={t.bubbleDark} />
+                                                    ))}
+                                                </div>
+
+                                                <Divider className={t.divider} />
+                                                <div className="p-3">
+                                                    <div className={`flex items-center gap-2 rounded-xl border ${t.border} ${t.fieldBg} px-2 py-2`}>
+                                                        <button className={`p-2 rounded-lg ${t.hover}`} aria-label="Attach"><Paperclip size={16} /></button>
+                                                        <input
+                                                            value={chatInput}
+                                                            onChange={(e) => setChatInput(e.target.value)}
+                                                            placeholder={vectorStoreId ? "Ask anything…" : "Upload a document first"}
+                                                            className={`flex-1 bg-transparent outline-none text-sm ${t.text}`}
+                                                            disabled={!vectorStoreId}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Enter" && !e.shiftKey) {
+                                                                    e.preventDefault();
+                                                                    sendMessage();
+                                                                }
+                                                            }}
+                                                        />
+                                                        <button onClick={() => setRecording((r) => !r)} className={`rounded-lg p-2 text-xs border ${t.border} ${t.hover}`} title={recording ? "Stop voice" : "Start voice"}>{recording ? <Pause size={16} /> : <Play size={16} />}</button>
+                                                        <button
+                                                            onClick={sendMessage}
+                                                            disabled={!vectorStoreId || !chatInput.trim()}
+                                                            className="rounded-lg px-3 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
+                                                            style={gradStyle}
+                                                        >
+                                                            <Send size={16} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </aside>
+                                        </Panel>
+                                    </PanelGroup>
+                                </div>
+                            </main>
+                        </div>
+                    </div>
+
+                    <CommandMenu open={showCmd} onClose={() => setShowCmd(false)} actions={actions} t={t} />
+                    <Toasts toasts={toasts} remove={removeToast} t={t} />
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<DocumentsGPTVibe />);
     </script>
 </body>
 </html>

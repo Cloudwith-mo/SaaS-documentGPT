@@ -1,6 +1,8 @@
-# DocumentGPT - AI Document Assistant
+# DocumentGPT - AI Writing & Research Assistant
 
-Production-ready SaaS for document processing with OpenAI integration.
+**"The AI assistant that understands your documents better than you do"**
+
+Production-ready SaaS focused on individual productivity with dual-mode AI assistance.
 
 ## Architecture
 
@@ -23,14 +25,25 @@ Production-ready SaaS for document processing with OpenAI integration.
 - `lambda/fixed_chat_handler.py` - Single Lambda handling all operations via OpenAI APIs
 - `.env` - Environment variables (Quadrant API key)
 
-## Features
+## Core Features
 
-- Document upload (PDF, TXT, DOCX, MD)
-- AI chat with document context
-- Smart caching and cost optimization
-- Command palette (⌘K), keyboard shortcuts
-- Toast notifications and progress tracking
-- Dark/light theme with brand colors
+**Dual Writing Modes:**
+- **Journal Mode**: Interactive live AI assistant with real-time grammar, style, and depth suggestions
+- **Research Mode**: Document analysis with AI chat for uploaded PDFs, DOCX, TXT, MD
+
+**Live AI Assistant:**
+- Real-time writing enhancement (grammar, tone, depth)
+- Pattern recognition for voice and cadence
+- Contextual suggestions to improve flow
+- Toggle on/off for distraction-free writing
+
+**AI Agents (6 Core Tools):**
+- 📧 Email drafting and sending
+- 📊 Data extraction to spreadsheets
+- 📅 Calendar event creation
+- 💾 Smart document saving
+- 📤 Multi-format export
+- 📝 Intelligent summarization
 
 ## AWS Services
 
@@ -39,9 +52,18 @@ Production-ready SaaS for document processing with OpenAI integration.
 - DynamoDB (caching + workflows)
 - Secrets Manager (OpenAI API key)
 
+## Unique Value Proposition
+
+**What makes DocumentGPT different:**
+1. **Dual-mode productivity**: Write journals OR analyze research documents
+2. **Live AI assistance**: Real-time writing enhancement while you type
+3. **AI Agents**: Automated actions like ChatGPT plugins but integrated
+4. **Individual focus**: Built for personal productivity, not team collaboration
+
 ## Cost Model
 
 - Smart routing reduces API costs
 - DynamoDB caching provides instant responses
 - Serverless architecture scales to zero
 - Monthly cost: $12-27 for typical usage
+- Target: Freemium with usage limits, premium for AI Agents

@@ -1,749 +1,968 @@
-<!doctype html>
-<html lang="en" data-theme="auto">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DocumentGPT · AI Document Assistant</title>
-  <style>
-    /* ----------------------
-       Design tokens
-       ---------------------- */
-    :root {
-      --bg: #f7fafc;                /* page background */
-      --panel: #ffffff;              /* cards/panels */
-      --soft: #f1f5f9;               /* panel hover / subtle fills */
-      --border: #e2e8f0;             /* borders */
-      --text: #0f172a;               /* primary text */
-      --muted: #475569;              /* secondary text */
-      --accent-1: #22d3ee;           /* cyan */
-      --accent-2: #3b82f6;           /* blue */
-      --accent-3: #7c3aed;           /* violet */
-      --ring: rgba(59,130,246,.35);
-      --shadow-1: 0 8px 30px rgba(2, 8, 23, .06);
-      --shadow-2: 0 20px 40px rgba(2, 8, 23, .10);
-      --radius: 14px;
-
-      /* Layout widths (JS updates these) */
-      --left: 280px;   /* sidebar left */
-      --right: 380px;  /* sidebar right */
-    }
-    
-    /* Dark mode */
-    [data-theme="dark"] {
-      --bg: #0b1020;
-      --panel: #0f172a;
-      --soft: #111a2e;
-      --border: #18223a;
-      --text: #e6ebff;
-      --muted: #a8b2d1;
-      --ring: rgba(56,189,248,.35);
-      --shadow-1: 0 10px 40px rgba(2, 8, 23, .65);
-      --shadow-2: 0 25px 55px rgba(2, 8, 23, .75);
-    }
-
-    /* ----------------------
-       Base + utilities
-       ---------------------- */
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body {
-      margin: 0;
-      font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
-      color: var(--text);
-      background: radial-gradient(1200px 600px at 30% -10%, rgba(34,211,238,.08), transparent 60%),
-                  radial-gradient(1200px 600px at 80% -20%, rgba(59,130,246,.08), transparent 65%),
-                  var(--bg);
-      -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
-    }
-    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-
-    .pill { display:inline-flex; align-items:center; gap:.5rem; padding:.45rem .7rem; border-radius:999px; background:var(--soft); border:1px solid var(--border); color:var(--muted); }
-    .chip { display:inline-flex; align-items:center; gap:.5rem; padding:.35rem .65rem; border-radius:999px; background:linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.35)); border:1px solid var(--border); color:var(--muted); backdrop-filter: blur(8px); cursor:pointer; transition: .2s ease; }
-    .chip:hover { transform: translateY(-1px); box-shadow: var(--shadow-1); }
-
-    button { font: inherit; color: inherit; background: transparent; border: 1px solid var(--border); border-radius: 12px; padding: .55rem .75rem; cursor: pointer; transition: .2s ease; }
-    button:hover { box-shadow: var(--shadow-1); background: var(--soft); }
-    button.ghost { border-color: transparent; background: transparent; }
-    button.primary { border-color: transparent; color: #0b1325; background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); }
-    button.icon { width: 36px; height: 36px; display: inline-grid; place-items: center; padding: 0; }
-    button.flat { border-color: var(--border); background: var(--panel); }
-    .btnbar { display:flex; gap:.5rem; align-items:center; }
-
-    .tag { padding:.25rem .5rem; border:1px solid var(--border); border-radius:999px; color:var(--muted); background:var(--soft); }
-
-    .blur-card { background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.35)); border:1px solid var(--border); backdrop-filter: blur(10px); border-radius: var(--radius); box-shadow: var(--shadow-1); }
-
-    .divider { height:1px; background:var(--border); margin:.75rem 0; }
-    .tiny { font-size: 12px; color: var(--muted); }
-
-    a { color: inherit; text-decoration: none; }
-
-    /* ----------------------
-       Header
-       ---------------------- */
-    .header { position: sticky; top: 0; z-index: 40; height: 56px; display:flex; align-items:center; gap: 12px; justify-content: space-between; padding: 0 .75rem; background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.5)), var(--panel); border-bottom: 1px solid var(--border); backdrop-filter: saturate(120%) blur(10px); }
-    .brand { display:flex; align-items:center; gap:.6rem; font-weight: 600; }
-    .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); box-shadow: 0 0 0 3px rgba(34,211,238,.2); }
-    .header .search { flex: 1; display:flex; align-items:center; gap:.6rem; max-width: 560px; margin: 0 10px; }
-    .search input { width: 100%; padding: .55rem .8rem; border:1px solid var(--border); border-radius: 12px; background: var(--soft); color: var(--text); outline: none; }
-
-    /* ----------------------
-       App layout
-       ---------------------- */
-    .app { height: calc(100dvh - 56px); display: grid; grid-template-columns: var(--left) 10px 1fr 10px var(--right); gap: 0; }
-    .pane { background: var(--panel); border-right: 1px solid var(--border); overflow: hidden; box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
-    .pane.right { border-left: 1px solid var(--border); border-right: none; }
-
-    /* Resizers */
-    .resizer { position: relative; cursor: col-resize; display: grid; place-items: center; }
-    .resizer::after { content:''; width: 3px; height: 32px; border-radius: 999px; background: linear-gradient(180deg, var(--accent-1), var(--accent-2)); opacity: .6; }
-
-    /* Left sidebar */
-    .left { display:flex; flex-direction:column; height: 100%; }
-    .left .section { padding: .8rem; }
-    .uploader { display:grid; grid-template-columns: 1fr auto; gap:.5rem; }
-    .uploader .file { padding:.55rem .7rem; border:1px dashed var(--border); border-radius: 12px; background: var(--soft); }
-
-    .recent { padding: .4rem .8rem .8rem; overflow:auto; }
-    .recent h4 { margin:.4rem 0 .35rem; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .4px; }
-    .recent .item { display:flex; align-items:center; gap:.6rem; padding:.45rem .5rem; border-radius: 10px; cursor:pointer; color: var(--muted); }
-    .recent .item:hover { background: var(--soft); color: var(--text); }
-    .avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(45deg, var(--accent-1), var(--accent-2)); box-shadow: inset 0 0 0 2px #fff3; }
-
-    /* Center / document area */
-    .center { display:flex; flex-direction:column; height:100%; }
-    .topbar { display:flex; align-items:center; justify-content: space-between; gap:.75rem; padding: .5rem .6rem; border-bottom:1px solid var(--border); background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.5)), var(--panel); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 10; }
-
-    .tabs { display:flex; align-items:center; gap:.35rem; overflow:auto hidden; scrollbar-width: none; }
-    .tab { display:inline-flex; align-items:center; gap:.5rem; border-radius: 999px; padding:.45rem .75rem; border:1px solid var(--border); background: var(--soft); color: var(--muted); white-space: nowrap; }
-    .tab.active { background: linear-gradient(90deg, rgba(34,211,238,.18), rgba(59,130,246,.18)); color: var(--text); border-color: transparent; }
-    .tab .x { opacity:.7; }
-
-    .tools { display:flex; align-items:center; gap:.5rem; }
-    .tools .kbd { border:1px solid var(--border); background: var(--soft); padding: .2rem .4rem; border-radius: 8px; font-size: 12px; color: var(--muted); }
-
-    .viewer { position: relative; flex: 1; display:grid; place-items:center; overflow:auto; background: repeating-linear-gradient(45deg, var(--soft), var(--soft) 8px, transparent 8px, transparent 16px); }
-    .page { width:min(900px, 95%); height: min(80dvh, 1050px); background:white; border-radius: 10px; box-shadow: var(--shadow-2); position: relative; overflow:hidden; display:grid; place-items:center; }
-    [data-theme="dark"] .page { background: #0b0f1e; }
-    .drop-hint { position: absolute; inset: 0; display:grid; place-items:center; pointer-events:none; color:var(--muted); }
-
-    .embed-wrap { width: min(1000px, 95%); height: calc(100% - 24px); transform-origin: top center; }
-    .embed-wrap embed { width: 100%; height: 100%; border: none; background: white; border-radius: 8px; box-shadow: var(--shadow-2); }
-
-    /* Right / chat */
-    .right { display:flex; flex-direction:column; height:100%; }
-    .right .bar { padding:.55rem .6rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content: space-between; gap:.5rem; }
-    .right .hints { padding:.6rem; display:flex; flex-wrap: wrap; gap:.45rem; border-bottom:1px solid var(--border); }
-
-    .msgs { flex:1; overflow:auto; padding:.75rem; display:flex; flex-direction:column; gap:.6rem; }
-    .msg { max-width: 88%; padding:.6rem .75rem; border-radius: 14px; box-shadow: var(--shadow-1); }
-    .msg.bot { align-self:flex-start; background: var(--panel); border:1px solid var(--border); }
-    .msg.me { align-self:flex-end; background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); color:#0b1325; border: 1px solid transparent; }
-
-    .composer { padding:.6rem; border-top:1px solid var(--border); display:flex; gap:.5rem; align-items:center; background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.5)), var(--panel); backdrop-filter: blur(8px); }
-    .composer .box { position: relative; flex:1; }
-    .composer textarea { width:100%; min-height:42px; max-height: 180px; padding:.65rem .85rem; border:1px solid var(--border); background: var(--soft); color:var(--text); border-radius: 12px; resize: none; outline: none; }
-
-    /* Command palette */
-    .palette { position: fixed; inset: 0; display:none; place-items:center; background: rgba(2, 6, 23, .35); backdrop-filter: blur(4px); z-index: 100; }
-    .palette.show { display:grid; }
-    .palette .panel { width: min(740px, 95vw); background: var(--panel); border:1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-2); overflow:hidden; }
-    .palette .panel header { padding:.75rem .9rem; border-bottom:1px solid var(--border); display:flex; gap:.6rem; align-items:center; }
-    .palette input { width:100%; padding:.6rem .7rem; border:1px solid var(--border); background: var(--soft); border-radius: 10px; outline:none; }
-    .palette .items { max-height: 52vh; overflow:auto; }
-    .palette .row { padding:.6rem .9rem; display:flex; align-items:center; gap:.6rem; cursor:pointer; }
-    .palette .row:hover { background: var(--soft); }
-
-    /* Zen mode */
-    [data-zen="on"] .left, [data-zen="on"] .right, [data-zen="on"] .resizer { display:none; }
-    [data-zen="on"] .app { grid-template-columns: 1fr; }
-
-    /* Responsive */
-    @media (max-width: 1080px) {
-      :root{ --right: 320px; --left: 240px; }
-    }
-    @media (max-width: 920px) {
-      .app { grid-template-columns: var(--left) 8px 1fr; }
-      .right, .resizer:last-of-type { display: none; }
-    }
-    @media (max-width: 720px) {
-      .app { grid-template-columns: 1fr; }
-      .left, .resizer { display:none; }
-      .header .search { display:none; }
-    }
-      /* Focus mode: center document + right chat */
-    [data-focus="on"] .header { display:flex; }
-    [data-focus="on"] .left, [data-focus="on"] .resizer, [data-focus="on"] .center .topbar { display:none; }
-    [data-focus="on"] .app { grid-template-columns: 1fr var(--right); }
-    [data-focus="on"] .right { display:flex !important; }
-    @media (max-width: 920px) {
-      [data-focus="on"] .app { grid-template-columns: 1fr minmax(280px, 40vw); }
-      [data-focus="on"] .right { display:flex !important; }
-    }
-
-    .status { margin: .5rem 0; padding: .5rem .7rem; border-radius: 10px; font-size: 13px; }
-    .status.success { background: rgba(34, 197, 94, 0.1); color: #16a34a; border: 1px solid rgba(34, 197, 94, 0.2); }
-    .status.error { background: rgba(239, 68, 68, 0.1); color: #dc2626; border: 1px solid rgba(239, 68, 68, 0.2); }
-    .status.loading { background: rgba(245, 158, 11, 0.1); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.2); }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocumentGPT v6 — Fusion</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .font-inter { font-family: Inter, system-ui, sans-serif; }
+        .transition-all { transition: all 0.2s ease; }
+    </style>
 </head>
-<body>
-  <!-- Header -->
-  <div class="header">
-    <div class="brand">
-      <span class="dot" aria-hidden="true"></span>
-      <span>DocumentGPT <span class="tiny">v5</span></span>
+<body class="h-screen w-full font-inter">
+    <div id="app" class="flex h-screen w-full overflow-hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="w-60 shrink-0 border-r backdrop-blur">
+            <div class="px-3 py-2 flex items-center gap-2 border-b">
+                <span class="text-sm font-semibold tracking-tight text-emerald-500">DocumentGPT v6 — Fusion</span>
+                <span class="ml-auto text-[10px] opacity-65">Ctrl/Cmd‑K</span>
+            </div>
+            <div class="p-3 flex gap-2">
+                <button id="uploadBtn" class="flex-1 rounded-xl border px-3 py-2 text-sm hover:shadow-sm">Upload</button>
+                <button id="newBtn" class="flex-1 rounded-xl border px-3 py-2 text-sm hover:shadow-sm border-emerald-500 text-emerald-500">New</button>
+            </div>
+
+            <div class="px-3 pt-1 text-[11px] uppercase tracking-wider opacity-60 flex items-center justify-between">
+                <span>My Documents</span>
+                <button id="newFolderBtn" class="text-[10px] px-1 py-0.5 rounded border hover:bg-black/5" title="New folder">📁+</button>
+            </div>
+            <div id="foldersContainer" class="px-2 pb-2 space-y-1 overflow-auto max-h-60">
+                <div id="uploadedDocs" class="space-y-1"></div>
+            </div>
+
+            <div class="px-3 pt-1 text-[11px] uppercase tracking-wider opacity-60">Recent</div>
+            <div class="px-2 pb-16 space-y-1 overflow-auto max-h-[calc(100vh-310px)]">
+                <div class="px-3 py-2 rounded-lg text-sm hover:shadow-sm border">AI assistant</div>
+                <div class="px-3 py-2 rounded-lg text-sm hover:shadow-sm border">Q3 review</div>
+                <div class="px-3 py-2 rounded-lg text-sm hover:shadow-sm border">Contract QA</div>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 p-3 flex items-center gap-2 border-t">
+                <button id="loginBtn" class="text-xs px-2 py-1 rounded-lg border hover:shadow-sm">Login</button>
+                <button id="priceBtn" class="text-xs px-2 py-1 rounded-lg border hover:shadow-sm">Price</button>
+                <div class="ml-auto flex items-center gap-2 text-[11px] opacity-65">
+                    <button id="paletteBtn">⌘K</button>
+                    <button id="settingsBtn">⚙︎</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Editor -->
+        <main class="flex-1 flex flex-col">
+            <!-- Top Controls -->
+            <div class="flex items-center gap-2 px-3 py-2 border-b">
+                <div id="tabsContainer" class="flex items-center gap-1 overflow-x-auto"></div>
+                <button id="addTabBtn" class="ml-1 text-xs px-2 py-1 rounded-full border hover:shadow-sm">＋</button>
+
+                <div class="ml-auto flex items-center gap-2">
+                    <div class="flex items-center gap-2 border rounded-xl px-2 py-1 text-xs">
+                        <input id="findInput" placeholder="Find text in this page" class="bg-transparent outline-none w-44" />
+                    </div>
+                    <div class="flex items-center gap-1 text-xs">
+                        <button id="zoomOut" class="px-2 py-1 rounded-lg border">−</button>
+                        <div id="zoomLabel" class="w-10 text-center">100%</div>
+                        <button id="zoomIn" class="px-2 py-1 rounded-lg border">＋</button>
+                    </div>
+                    <button id="focusBtn" class="text-xs px-2 py-1 rounded-lg border">Focus mode</button>
+                    <button id="themeBtn" class="text-xs px-2 py-1 rounded-lg border">🌞 Light</button>
+                    <button id="settingsBtn2" class="text-xs px-2 py-1 rounded-lg border">Settings</button>
+                </div>
+            </div>
+
+            <!-- Editor Surface -->
+            <div class="flex-1 overflow-auto p-4">
+                <div class="mx-auto max-w-3xl">
+                    <div id="docEditor" class="rounded-2xl border shadow-sm">
+                        <div class="px-4 pt-3 text-[12px] opacity-60">New document — start journaling…</div>
+                        <textarea id="editor" placeholder="Your page is white and ready. Type here…" class="w-full h-[56vh] resize-none bg-transparent outline-none px-4 py-3 text-[15px] leading-7 rounded-2xl"></textarea>
+                    </div>
+                    <div id="pdfViewer" class="rounded-2xl border shadow-sm h-[60vh] flex items-center justify-center hidden">
+                        <div class="text-center opacity-70">
+                            <div class="text-sm">PDF preview</div>
+                            <div id="pdfInfo" class="text-xs mt-1">Document — (placeholder)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metrics Bar -->
+            <div class="text-xs px-4 py-2 flex items-center gap-4 border-t">
+                <div>🥤 Mood: <span id="mood">Neutral</span></div>
+                <div>🎛️ Tone: <span id="tone">Balanced</span></div>
+                <div>📝 Words: <span id="words">0</span></div>
+                <div>⏱️ Read time: <span id="readTime">1m</span></div>
+                <div>📖 Readability: <span id="readability">74</span></div>
+            </div>
+        </main>
+
+        <!-- Assistant -->
+        <aside id="assistant" class="w-[340px] shrink-0 border-l backdrop-blur flex flex-col">
+            <!-- Header -->
+            <div class="px-3 py-2 border-b flex items-center gap-2">
+                <div class="text-sm font-medium">Live assistant</div>
+                <div class="ml-auto flex items-center gap-1 rounded-full p-1 border">
+                    <button id="journalMode" class="px-3 py-1 text-xs rounded-full border border-emerald-500 text-emerald-500 shadow-sm">Journal</button>
+                    <button id="docsMode" class="px-3 py-1 text-xs rounded-full opacity-70 hover:opacity-100">Docs</button>
+                </div>
+            </div>
+
+            <!-- Suggestions/Actions -->
+            <div id="suggestionsContainer" class="p-3 space-y-3 overflow-auto flex-1"></div>
+
+            <!-- Live Assistant Toggle -->
+            <div class="px-3 text-xs flex items-center gap-2 opacity-70">
+                <input type="checkbox" id="liveToggle" checked /> Live Assistant
+                <div id="liveStatus" class="w-2 h-2 rounded-full bg-emerald-500" title="Live assistant status"></div>
+                <span id="liveStatusText" class="text-[10px] opacity-60"></span>
+            </div>
+
+            <!-- Chat -->
+            <div class="border-t">
+                <div id="chatMessages" class="p-3 space-y-2 max-h-32 overflow-y-auto">
+                    <div class="text-sm p-3 rounded-2xl border bg-emerald-50/60 border-emerald-200">
+                        Upload a document to start analyzing it. I can summarize, extract key information, and answer questions about your documents.
+                    </div>
+                </div>
+                <div class="p-2">
+                    <div class="text-[10px] uppercase tracking-wider opacity-60 mb-1">AI Agents</div>
+                    <div class="flex gap-1 flex-wrap">
+                        <button id="emailAgent" class="text-[10px] px-2 py-1 rounded border border-emerald-500 text-emerald-500">📧 Email</button>
+                        <button id="sheetsAgent" class="text-[10px] px-2 py-1 rounded border border-emerald-500 text-emerald-500">📊 Sheets</button>
+                        <button id="calendarAgent" class="text-[10px] px-2 py-1 rounded border border-emerald-500 text-emerald-500">📅 Calendar</button>
+                        <button id="saveAgent" class="text-[10px] px-2 py-1 rounded border border-emerald-500 text-emerald-500">💾 Save</button>
+                        <button id="exportAgent" class="text-[10px] px-2 py-1 rounded border border-emerald-500 text-emerald-500">📤 Export</button>
+                        <button id="summaryAgent" class="text-[10px] px-2 py-1 rounded border border-emerald-500 text-emerald-500">📝 Summary</button>
+                    </div>
+                </div>
+                <div class="p-2 flex items-end gap-2">
+                    <textarea id="chatInput" placeholder="Ask for advice, insights, or a reframe…" class="flex-1 min-h-[70px] max-h-40 rounded-xl border p-2 text-sm resize-y"></textarea>
+                    <button id="sendBtn" class="rounded-xl px-3 py-2 text-sm bg-emerald-500 text-white border-emerald-500">➤</button>
+                </div>
+            </div>
+        </aside>
     </div>
 
-    <div class="search" role="search">
-      <input id="globalSearch" placeholder="Ctrl/⌘ K – command palette · Search docs & actions" />
+    <!-- Hidden File Input -->
+    <input type="file" id="fileInput" class="hidden" accept=".pdf,.txt,.md,.docx" />
+
+    <!-- Command Palette -->
+    <div id="palette" class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-start justify-center pt-28 hidden">
+        <div class="w-[560px] rounded-2xl border shadow-xl overflow-hidden bg-white">
+            <div class="px-3 py-2 border-b text-xs opacity-65">Command palette</div>
+            <input id="paletteInput" placeholder="Type a command…" class="w-full px-4 py-3 bg-transparent outline-none text-sm" />
+            <div id="paletteItems" class="max-h-72 overflow-auto"></div>
+        </div>
     </div>
 
-    <div class="btnbar">
-      <button class="icon ghost" id="zenBtn" title="Focus mode (doc + chat)">
-        <!-- Maximize icon -->
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9V5a2 2 0 0 1 2-2h4"/><path d="M21 9V5a2 2 0 0 0-2-2h-4"/><path d="M3 15v4a2 2 0 0 0 2 2h4"/><path d="M21 15v4a2 2 0 0 1-2 2h-4"/></svg>
-      </button>
-      <button class="icon ghost" id="themeBtn" title="Toggle theme">
-        <!-- sun/moon -->
-        <svg id="sunIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M20 12h2M2 12H4m14.14 5.66 1.41 1.41M4.45 4.45 5.86 5.86m0 12.28-1.41 1.41M19.55 4.45 18.14 5.86"/></svg>
-      </button>
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center hidden">
+        <div class="w-[400px] rounded-2xl border shadow-xl overflow-hidden bg-white">
+            <div class="px-4 py-3 border-b flex items-center">
+                <div class="font-medium">Login to DocumentGPT</div>
+                <button id="closeLogin" class="ml-auto text-sm opacity-70">×</button>
+            </div>
+            <div class="p-4 space-y-4">
+                <input type="email" id="loginEmail" placeholder="Email" class="w-full rounded-lg border px-3 py-2" />
+                <input type="password" id="loginPassword" placeholder="Password" class="w-full rounded-lg border px-3 py-2" />
+                <button id="loginSubmit" class="w-full bg-emerald-500 text-white rounded-lg px-3 py-2 hover:bg-emerald-600">Login</button>
+                <div class="text-center text-sm opacity-70">
+                    Don't have an account? <button id="showSignup" class="text-emerald-500 hover:underline">Sign up</button>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <!-- App Grid -->
-  <div class="app" id="appGrid">
-    <!-- Left Pane -->
-    <aside class="pane left">
-      <div class="section" style="border-bottom:1px solid var(--border)">
-        <div class="uploader" aria-label="Upload">
-          <label class="file" for="fileInput">Drop or choose files</label>
-          <input id="fileInput" class="sr-only" type="file" accept="application/pdf,.txt,.md,.doc,.docx,.json,.csv" multiple>
-          <button id="uploadBtn" class="primary">Upload</button>
+    <!-- Signup Modal -->
+    <div id="signupModal" class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center hidden">
+        <div class="w-[400px] rounded-2xl border shadow-xl overflow-hidden bg-white">
+            <div class="px-4 py-3 border-b flex items-center">
+                <div class="font-medium">Create Account</div>
+                <button id="closeSignup" class="ml-auto text-sm opacity-70">×</button>
+            </div>
+            <div class="p-4 space-y-4">
+                <input type="text" id="signupName" placeholder="Full Name" class="w-full rounded-lg border px-3 py-2" />
+                <input type="email" id="signupEmail" placeholder="Email" class="w-full rounded-lg border px-3 py-2" />
+                <input type="password" id="signupPassword" placeholder="Password (min 8 chars)" class="w-full rounded-lg border px-3 py-2" />
+                <button id="signupSubmit" class="w-full bg-emerald-500 text-white rounded-lg px-3 py-2 hover:bg-emerald-600">Create Account</button>
+                <div class="text-center text-sm opacity-70">
+                    Already have an account? <button id="showLogin" class="text-emerald-500 hover:underline">Login</button>
+                </div>
+            </div>
         </div>
-        <div id="uploadStatus"></div>
-      </div>
-
-      <div class="recent">
-        <h4>UPLOADED DOCS</h4>
-        <div id="uploadedDocs"></div>
-      </div>
-      
-      <div class="recent">
-        <h4>RECENT</h4>
-        <div class="item" data-open-tab="AI assistant"><span class="avatar"></span> <div><div>AI assistant</div><div class="tiny">2h ago</div></div></div>
-        <div class="item" data-open-tab="Q3 review"><span class="avatar"></span> <div><div>Q3 review</div><div class="tiny">2h ago</div></div></div>
-        <div class="item" data-open-tab="Contract QA"><span class="avatar"></span> <div><div>Contract QA</div><div class="tiny">2h ago</div></div></div>
-      </div>
-    </aside>
-
-    <!-- Resizer L -->
-    <div class="resizer" data-side="left" title="Drag to resize"></div>
-
-    <!-- Center Pane -->
-    <section class="pane center">
-      <div class="topbar">
-        <div class="tabs" id="tabs">
-          <button class="tab active" data-id="welcome"><span>Welcome</span></button>
-          <button class="tab ghost" id="addTab" title="Open new tab">＋</button>
-        </div>
-
-        <div class="tools">
-          <div class="btnbar" role="toolbar" aria-label="Zoom">
-            <button class="icon flat" id="zoomOut" title="Zoom out">–</button>
-            <span class="kbd" id="zoomLabel">110%</span>
-            <button class="icon flat" id="zoomIn" title="Zoom in">＋</button>
-          </div>
-          <span class="tiny">Page <b id="pageNow">1</b> / <b id="pageTotal">1</b></span>
-          <input id="findInDoc" placeholder="Find text in this page" style="padding:.45rem .6rem; border-radius:10px; border:1px solid var(--border); background:var(--soft); width: 220px;">
-          <button class="ghost" id="shareBtn">Share</button>
-        </div>
-      </div>
-
-      <div class="viewer" id="viewer" tabindex="0">
-        <div class="drop-hint" id="dropHint">Drop a document to view (upload begins automatically)</div>
-        <div class="embed-wrap" id="embedWrap" style="display:none"></div>
-        <div class="page" id="placeholderPage" aria-label="Document page">
-          <div style="text-align:center">
-            <div class="tiny" style="letter-spacing:.04em;color:var(--muted);margin-bottom:.25rem">Preview</div>
-            <div style="font-weight:700;font-size:20px">Your document will appear here</div>
-            <div class="tiny" style="margin-top:.5rem">Drag & drop a PDF or click <b>Upload</b> · Use <b>Ctrl/⌘ + K</b> for commands</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Resizer R -->
-    <div class="resizer" data-side="right" title="Drag to resize"></div>
-
-    <!-- Right Pane (Chat) -->
-    <aside class="pane right">
-      <div class="bar">
-        <div class="btnbar">
-          <span class="pill"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 4v7c0 3.6-3.6 6-7 7-3.4-1-7-3.4-7-7V7l7-4z"/></svg> GPT‑4o</span>
-          <span class="pill">High quality</span>
-        </div>
-        <div class="btnbar">
-          <button class="ghost" id="clearChat">Clear</button>
-        </div>
-      </div>
-
-      <div class="hints">
-        <div class="chip" data-hint="Summarize this document">Summarize the document</div>
-        <div class="chip" data-hint="What are the key points?">What are the key points?</div>
-        <div class="chip" data-hint="List all dates and currency">Any important dates or numbers?</div>
-        <div class="chip" data-hint="Extract totals with currency and page numbers">List all totals with currency</div>
-      </div>
-
-      <div class="msgs" id="msgs">
-        <div class="msg bot">Upload a document to start analyzing it. I can summarize, extract key information, and answer questions about your documents.</div>
-      </div>
-
-      <div class="composer">
-        <button class="icon" id="attachBtn" title="Attach a file"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21.44 11.05 12 20.5a6 6 0 1 1-8.49-8.49L13.5 2.5a4 4 0 1 1 5.66 5.66L7.75 19.56"/></svg></button>
-        <div class="box"><textarea id="composer" placeholder="Ask anything…"></textarea></div>
-        <button class="icon primary" id="sendBtn" title="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0b1325" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg></button>
-      </div>
-    </aside>
-  </div>
-
-  <!-- Command palette -->
-  <div class="palette" id="palette" aria-hidden="true">
-    <div class="panel">
-      <header>
-        <span class="pill" style="background:linear-gradient(90deg, var(--accent-1), var(--accent-2)); color:#0b1325; border-color:transparent">⌘K</span>
-        <input id="paletteInput" placeholder="Search commands (upload, summarize, key points, toggle theme, open settings…)" />
-      </header>
-      <div class="items" id="paletteItems">
-        <div class="row" data-cmd="upload">Upload document…</div>
-        <div class="row" data-cmd="summarize">Summarize current tab</div>
-        <div class="row" data-cmd="keypoints">Extract key points</div>
-        <div class="row" data-cmd="numbers">Find dates & currency</div>
-        <div class="row" data-cmd="theme">Toggle theme</div>
-        <div class="row" data-cmd="zen">Toggle focus mode (doc + chat)</div>
-        <div class="row" data-cmd="newtab">Open new empty tab</div>
-        <div class="row" data-cmd="share">Share current tab</div>
-      </div>
     </div>
-  </div>
 
-  <script>
-    // Utilities
-    const $ = (q, el=document) => el.querySelector(q);
-    const $$ = (q, el=document) => Array.from(el.querySelectorAll(q));
+    <!-- New Folder Modal -->
+    <div id="folderModal" class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center hidden">
+        <div class="w-[300px] rounded-2xl border shadow-xl overflow-hidden bg-white">
+            <div class="px-4 py-3 border-b flex items-center">
+                <div class="font-medium">New Folder</div>
+                <button id="closeFolderModal" class="ml-auto text-sm opacity-70">×</button>
+            </div>
+            <div class="p-4 space-y-4">
+                <input type="text" id="folderName" placeholder="Folder name" class="w-full rounded-lg border px-3 py-2" />
+                <button id="createFolderBtn" class="w-full bg-emerald-500 text-white rounded-lg px-3 py-2 hover:bg-emerald-600">Create Folder</button>
+            </div>
+        </div>
+    </div>
 
-    // DocumentGPT API
-    const API_BASE = 'https://i1dy8i3692.execute-api.us-east-1.amazonaws.com/prod';
-    let currentVectorStoreId = null;
+    <!-- Settings Modal -->
+    <div id="settings" class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-start justify-center pt-24 hidden">
+        <div class="w-[520px] rounded-2xl border shadow-xl overflow-hidden bg-white">
+            <div class="px-4 py-3 border-b flex items-center">
+                <div class="font-medium">Settings</div>
+                <button id="closeSettings" class="ml-auto text-sm opacity-70">×</button>
+            </div>
+            <div class="p-4 space-y-4 text-sm">
+                <div class="flex items-center gap-3">
+                    <div class="w-40 opacity-70">Theme</div>
+                    <button id="lightTheme" class="px-3 py-1 rounded-lg border border-emerald-500 text-emerald-500 shadow-sm">Light</button>
+                    <button id="darkTheme" class="px-3 py-1 rounded-lg border">Dark</button>
+                </div>
+                <div class="flex items-center gap-3" id="premiumFeatures" style="display: none;">
+                    <div class="w-40 opacity-70">Gmail Integration</div>
+                    <button id="connectGmail" class="px-3 py-1 rounded-lg border border-emerald-500 text-emerald-500">Connect Gmail</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    const state = {
-      theme: localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
-      left: localStorage.getItem('left') || getComputedStyle(document.documentElement).getPropertyValue('--left'),
-      right: localStorage.getItem('right') || getComputedStyle(document.documentElement).getPropertyValue('--right'),
-      zoom: 1.1,
-      tabs: new Map(), // id -> {name, url, vectorStoreId}
-      active: null
-    };
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 text-white text-sm px-3 py-2 rounded-xl shadow-lg bg-emerald-500 hidden"></div>
 
-    function applyTheme() {
-      document.documentElement.setAttribute('data-theme', state.theme);
-    }
+    <script>
+        // DocumentGPT API
+        const API_BASE = 'https://i1dy8i3692.execute-api.us-east-1.amazonaws.com/prod';
 
-    function setCols(left, right) {
-      document.documentElement.style.setProperty('--left', left);
-      document.documentElement.style.setProperty('--right', right);
-      localStorage.setItem('left', left);
-      localStorage.setItem('right', right);
-    }
-
-    applyTheme();
-    setCols(state.left, state.right);
-
-    // Theme & zen
-    $('#themeBtn').addEventListener('click', () => {
-      state.theme = state.theme === 'dark' ? 'light' : 'dark';
-      localStorage.setItem('theme', state.theme); applyTheme();
-    });
-    $('#zenBtn').addEventListener('click', () => {
-      const on = document.body.getAttribute('data-focus') === 'on' ? 'off' : 'on';
-      document.body.setAttribute('data-focus', on);
-    });
-
-    // Resizers
-    $$('.resizer').forEach(r => {
-      r.addEventListener('pointerdown', e => {
-        r.setPointerCapture(e.pointerId);
-        const side = r.dataset.side;
-        const startX = e.clientX;
-        const rect = $('#appGrid').getBoundingClientRect();
-        const leftStart = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--left'));
-        const rightStart = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--right'));
-        const onMove = ev => {
-          const dx = ev.clientX - startX;
-          if (side === 'left') {
-            const newLeft = Math.min(Math.max(180, leftStart + dx), rect.width - 420); // clamp
-            setCols(newLeft + 'px', getComputedStyle(document.documentElement).getPropertyValue('--right'));
-          } else {
-            const newRight = Math.min(Math.max(280, rightStart - dx), rect.width - 420);
-            setCols(getComputedStyle(document.documentElement).getPropertyValue('--left'), newRight + 'px');
-          }
+        // State
+        let state = {
+            theme: 'light',
+            mode: 'Journal',
+            simpleMode: false,
+            user: null,
+            accessToken: localStorage.getItem('documentgpt_token'),
+            folders: [],
+            docs: [
+                { id: 'doc1', name: 'Untitled', type: 'doc', content: "What's one intention for today?\n\n", folder_id: null }
+            ],
+            activeId: 'doc1',
+            focus: false,
+            scale: 1,
+            liveAssistant: true,
+            suggestions: [
+                { id: 's1', text: "What's one intention for today?", type: 'static' },
+                { id: 's2', text: "Note a challenge and a tiny next step.", type: 'static' }
+            ]
         };
-        const onUp = () => {
-          window.removeEventListener('pointermove', onMove);
-          window.removeEventListener('pointerup', onUp);
-        };
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onUp, { once: true });
-      });
-    });
 
-    // Upload
-    const fileInput = $('#fileInput');
-    $('#uploadBtn').addEventListener('click', () => fileInput.click());
+        // Helpers
+        function uid() { return 'id_' + Math.random().toString(36).slice(2, 9); }
 
-    fileInput.addEventListener('change', e => {
-      if (!e.target.files) return;
-      handleFiles(e.target.files);
-      e.target.value = '';
-    });
+        function getActiveDoc() {
+            return state.docs.find(d => d.id === state.activeId) || state.docs[0];
+        }
 
-    // Drag & drop
-    const viewer = $('#viewer');
-    ['dragenter','dragover'].forEach(ev => viewer.addEventListener(ev, e => { e.preventDefault(); $('#dropHint').textContent = 'Release to upload…'; }));
-    ;['dragleave','drop'].forEach(ev => viewer.addEventListener(ev, e => { e.preventDefault(); $('#dropHint').textContent = 'Drop a document to view (upload begins automatically)'; }));
-    viewer.addEventListener('drop', e => { handleFiles(e.dataTransfer.files); });
+        function analyzeText(text) {
+            const words = (text.trim().match(/\b\w+\b/g) || []).length;
+            const sentences = Math.max(1, (text.match(/[.!?]/g) || []).length);
+            const syllables = (text.toLowerCase().match(/[aeiouy]{1,2}/g) || []).length;
+            const W = Math.max(1, words);
+            const score = 206.835 - 1.015 * (W / sentences) - 84.6 * (syllables / W);
+            const readability = Math.max(0, Math.min(100, Math.round(score)));
+            const readMins = Math.max(1, Math.round(words / 200));
+            const tone = words < 40 ? "Balanced" : words < 150 ? "Reflective" : "Committed";
+            const mood = words < 20 ? "Neutral" : words < 120 ? "Calm" : "Driven";
+            return { words, readMins, tone, mood, readability };
+        }
 
-    async function handleFiles(files) {
-      for (const file of Array.from(files)) {
-        const id = 'tab_' + Math.random().toString(36).slice(2, 8);
-        
-        // Add tab immediately
-        state.tabs.set(id, { 
-          name: file.name, 
-          url: URL.createObjectURL(file),
-          vectorStoreId: null,
-          uploading: true
-        });
-        addTab(id, file.name);
-        activate(id);
-        
-        // Show upload status
-        showStatus('Uploading ' + file.name + '...', 'loading');
-        
-        try {
-          // Convert file to base64
-          const base64Content = await fileToBase64(file);
-          
-          // Upload to DocumentGPT API
-          const response = await fetch(`${API_BASE}/upload`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: file.name,
-              file_content: base64Content.split(',')[1],
-              user_id: 'web-user'
-            })
-          });
-
-          const result = await response.json();
-          
-          if (response.ok) {
-            // Update tab with vector store ID
-            const tabData = state.tabs.get(id);
-            tabData.vectorStoreId = result.vector_store_id;
-            tabData.uploading = false;
-            state.tabs.set(id, tabData);
+        function updateAnalytics() {
+            const activeDoc = getActiveDoc();
+            const text = activeDoc.type === 'doc' ? (activeDoc.content || '') : '';
+            const analytics = analyzeText(text);
             
-            // Update current vector store if this is the active tab
-            if (state.active === id) {
-              currentVectorStoreId = result.vector_store_id;
+            document.getElementById('mood').textContent = analytics.mood;
+            document.getElementById('tone').textContent = analytics.tone;
+            document.getElementById('words').textContent = analytics.words;
+            document.getElementById('readTime').textContent = analytics.readMins + 'm';
+            document.getElementById('readability').textContent = analytics.readability;
+        }
+
+        function renderTabs() {
+            const container = document.getElementById('tabsContainer');
+            container.innerHTML = '';
+            
+            state.docs.forEach(doc => {
+                const active = doc.id === state.activeId;
+                const tab = document.createElement('div');
+                tab.className = `group flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs whitespace-nowrap hover:shadow-sm cursor-pointer ${
+                    active ? 'border-emerald-500 text-emerald-500' : ''
+                }`;
+                tab.innerHTML = `
+                    <span class="truncate max-w-[180px]">${doc.name}</span>
+                    <button class="opacity-50 group-hover:opacity-100" onclick="closeTab('${doc.id}')">×</button>
+                `;
+                tab.addEventListener('click', (e) => {
+                    if (!e.target.closest('button')) {
+                        setActiveDoc(doc.id);
+                    }
+                });
+                container.appendChild(tab);
+            });
+        }
+
+        function renderUploadedDocs() {
+            const container = document.getElementById('uploadedDocs');
+            container.innerHTML = '';
+            
+            const uploadedDocs = state.docs.filter(d => d.type === 'pdf');
+            
+            if (uploadedDocs.length === 0) {
+                container.innerHTML = '<div class="text-xs opacity-60 text-center py-2">No documents uploaded yet</div>';
+                return;
             }
             
-            // Update uploaded docs list
-            updateUploadedDocs();
+            uploadedDocs.forEach(doc => {
+                const active = doc.id === state.activeId;
+                const item = document.createElement('button');
+                item.className = `w-full text-left px-3 py-2 rounded-lg text-sm hover:shadow-sm border ${
+                    active ? 'border-l-4 border-l-emerald-500' : ''
+                }`;
+                item.textContent = doc.name;
+                item.addEventListener('click', () => setActiveDoc(doc.id));
+                container.appendChild(item);
+            });
+        }
+
+        function renderSuggestions() {
+            const container = document.getElementById('suggestionsContainer');
+            container.innerHTML = '';
             
-            showStatus('✅ ' + result.message, 'success');
-          } else {
-            showStatus('❌ ' + result.error, 'error');
-            // Mark upload as failed
-            const tabData = state.tabs.get(id);
-            tabData.uploading = false;
-            tabData.uploadFailed = true;
-            state.tabs.set(id, tabData);
-          }
-        } catch (error) {
-          showStatus('❌ Upload failed: ' + error.message, 'error');
-          // Mark upload as failed
-          const tabData = state.tabs.get(id);
-          tabData.uploading = false;
-          tabData.uploadFailed = true;
-          state.tabs.set(id, tabData);
+            if (state.mode === 'Journal' && state.liveAssistant) {
+                state.suggestions.forEach(suggestion => {
+                    const div = document.createElement('div');
+                    div.className = 'rounded-2xl p-3 shadow-sm border';
+                    div.innerHTML = `
+                        <div class="text-sm">${suggestion.text}</div>
+                        <div class="mt-2 flex gap-2">
+                            <button onclick="acceptSuggestion('${suggestion.id}')" class="text-xs px-2 py-1 rounded-lg bg-emerald-500 text-white border-emerald-500">Accept</button>
+                            <button onclick="rejectSuggestion('${suggestion.id}')" class="text-xs px-2 py-1 rounded-lg border border-emerald-500 text-emerald-500">Reject</button>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+            } else if (state.mode === 'Docs') {
+                const actions = [
+                    "Summarize the document",
+                    "What are the key points?", 
+                    "Any important dates or numbers?",
+                    "List all totals with currency",
+                    "Extract → CSV",
+                    "Send to email"
+                ];
+                
+                actions.forEach(action => {
+                    const button = document.createElement('button');
+                    button.className = 'w-full text-left px-3 py-2 rounded-xl border text-sm hover:shadow-sm border-emerald-500 text-emerald-500';
+                    button.textContent = action;
+                    button.addEventListener('click', () => {
+                        addChatMessage(action, 'user');
+                        sendChatMessage(action);
+                    });
+                    container.appendChild(button);
+                });
+            }
+            
+            if (!state.liveAssistant) {
+                container.innerHTML = '<div class="text-xs opacity-60 text-center py-2">Live Assistant disabled</div>';
+            }
         }
-      }
-    }
 
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-      });
-    }
-
-    function showStatus(message, type) {
-      const statusEl = $('#uploadStatus');
-      statusEl.innerHTML = `<div class="status ${type}">${message}</div>`;
-      setTimeout(() => statusEl.innerHTML = '', 3000);
-    }
-
-    // Tabs
-    function addTab(id, name) {
-      const b = document.createElement('button');
-      b.className = 'tab'; b.dataset.id = id; b.innerHTML = `<span>${name}</span><span class="x" title="Close">✕</span>`;
-      $('#tabs').insertBefore(b, $('#addTab'));
-    }
-
-    function activate(id) {
-      state.active = id;
-      $$('#tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.id === id));
-
-      const tab = state.tabs.get(id);
-      if (tab && tab.url) {
-        // Set current vector store ID for chat
-        currentVectorStoreId = tab.vectorStoreId;
-        
-        $('#placeholderPage').style.display = 'none';
-        $('#embedWrap').style.display = 'block';
-        
-        // Handle different file types
-        if (tab.name.toLowerCase().endsWith('.pdf')) {
-          $('#embedWrap').innerHTML = `<embed id="pdf" type="application/pdf" src="${tab.url}" />`;
-        } else {
-          // For text files, show content in a text viewer
-          $('#embedWrap').innerHTML = `<iframe src="${tab.url}" style="width:100%;height:100%;border:none;background:white;border-radius:8px;"></iframe>`;
+        function setActiveDoc(id) {
+            state.activeId = id;
+            const activeDoc = getActiveDoc();
+            
+            renderTabs();
+            renderUploadedDocs();
+            
+            const docEditor = document.getElementById('docEditor');
+            const pdfViewer = document.getElementById('pdfViewer');
+            const editor = document.getElementById('editor');
+            
+            if (activeDoc.type === 'doc') {
+                docEditor.classList.remove('hidden');
+                pdfViewer.classList.add('hidden');
+                editor.value = activeDoc.content || '';
+                editor.style.transform = `scale(${state.scale})`;
+            } else {
+                docEditor.classList.add('hidden');
+                pdfViewer.classList.remove('hidden');
+                document.getElementById('pdfInfo').textContent = `${activeDoc.name} — (placeholder)`;
+                pdfViewer.style.transform = `scale(${state.scale})`;
+            }
+            
+            document.getElementById('zoomLabel').textContent = Math.round(state.scale * 100) + '%';
+            updateModeButtons();
+            updateAnalytics();
         }
-        applyZoom();
-        
-        // Update chat context message
-        updateChatContext(tab.name, tab.uploading, tab.uploadFailed);
-      } else {
-        currentVectorStoreId = null;
-        $('#embedWrap').style.display = 'none';
-        $('#placeholderPage').style.display = 'grid';
-        updateChatContext(null);
-      }
-    }
 
-    $('#tabs').addEventListener('click', e => {
-      const t = e.target.closest('.tab');
-      if (!t) return;
-      const isClose = e.target.classList.contains('x');
-      const id = t.dataset.id;
-      if (isClose) {
-        // Close tab
-        const wasActive = t.classList.contains('active');
-        t.remove();
-        const info = state.tabs.get(id);
-        if (info && info.url) URL.revokeObjectURL(info.url);
-        state.tabs.delete(id);
-        if (wasActive) {
-          const first = $('#tabs .tab');
-          first ? activate(first.dataset.id) : activate('welcome');
+        function updateModeButtons() {
+            const journalBtn = document.getElementById('journalMode');
+            const docsBtn = document.getElementById('docsMode');
+            
+            if (state.mode === 'Journal') {
+                journalBtn.className = 'px-3 py-1 text-xs rounded-full border border-emerald-500 text-emerald-500 shadow-sm';
+                docsBtn.className = 'px-3 py-1 text-xs rounded-full opacity-70 hover:opacity-100';
+            } else {
+                journalBtn.className = 'px-3 py-1 text-xs rounded-full opacity-70 hover:opacity-100';
+                docsBtn.className = 'px-3 py-1 text-xs rounded-full border border-emerald-500 text-emerald-500 shadow-sm';
+            }
+            
+            renderSuggestions();
+            
+            const chatInput = document.getElementById('chatInput');
+            chatInput.placeholder = state.mode === 'Journal' 
+                ? 'Ask for advice, insights, or a reframe…'
+                : 'Ask to summarize, extract numbers, etc…';
         }
-        
-        // Update uploaded docs list
-        updateUploadedDocs();
-      } else {
-        activate(id);
-      }
-    });
 
-    $('#addTab').addEventListener('click', () => {
-      const id = 'empty_' + Math.random().toString(36).slice(2,6);
-      state.tabs.set(id, { name: 'Untitled', url: null, vectorStoreId: null });
-      addTab(id, 'Untitled');
-      activate(id);
-    });
-
-    // Preload welcome tab
-    state.tabs.set('welcome', { name: 'Welcome', url: null, vectorStoreId: null });
-    activate('welcome');
-    
-    function updateChatContext(fileName, uploading, failed) {
-      const contextMsg = $('#msgs .msg.bot:first-child');
-      if (fileName) {
-        if (uploading) {
-          contextMsg.textContent = `Uploading "${fileName}"... Please wait for processing to complete before chatting.`;
-        } else if (failed) {
-          contextMsg.textContent = `Failed to upload "${fileName}". Please try uploading again.`;
-        } else {
-          contextMsg.textContent = `Now viewing "${fileName}". Ask me anything about this document!`;
+        function closeTab(id) {
+            if (state.docs.length <= 1) return;
+            
+            state.docs = state.docs.filter(d => d.id !== id);
+            
+            if (state.activeId === id) {
+                state.activeId = state.docs[0].id;
+            }
+            
+            setActiveDoc(state.activeId);
         }
-      } else {
-        contextMsg.textContent = 'Upload a document to start analyzing it. I can summarize, extract key information, and answer questions about your documents.';
-      }
-    }
-    
-    function updateUploadedDocs() {
-      const container = $('#uploadedDocs');
-      container.innerHTML = '';
-      
-      // Get all uploaded documents (excluding welcome tab)
-      const uploadedTabs = Array.from(state.tabs.entries())
-        .filter(([id, tab]) => id !== 'welcome' && tab.vectorStoreId)
-        .sort(([,a], [,b]) => a.name.localeCompare(b.name));
-      
-      if (uploadedTabs.length === 0) {
-        container.innerHTML = '<div class="tiny" style="padding:.5rem;color:var(--muted);text-align:center">No documents uploaded yet</div>';
-        return;
-      }
-      
-      uploadedTabs.forEach(([id, tab]) => {
-        const item = document.createElement('div');
-        item.className = 'item';
-        item.innerHTML = `
-          <span style="font-size:16px">📄</span>
-          <div>
-            <div style="font-size:13px;font-weight:500">${tab.name}</div>
-            <div class="tiny">Ready to chat</div>
-          </div>
-        `;
-        item.addEventListener('click', () => activate(id));
-        container.appendChild(item);
-      });
-    }
 
-    // Zoom controls
-    function applyZoom(){
-      const wrap = $('#embedWrap');
-      if (!wrap) return;
-      wrap.style.transform = `scale(${state.zoom})`;
-      wrap.style.margin = `${(state.zoom-1)*40}px auto`;
-      $('#zoomLabel').textContent = Math.round(state.zoom*100) + '%';
-    }
-    $('#zoomIn').addEventListener('click', ()=>{ state.zoom = Math.min(2, state.zoom + 0.1); applyZoom(); });
-    $('#zoomOut').addEventListener('click', ()=>{ state.zoom = Math.max(0.6, state.zoom - 0.1); applyZoom(); });
-
-    // Find (note: real PDF text search requires PDF.js; here we simulate a UX hook)
-    $('#findInDoc').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ toast('Search: simulated in mock. Hook your PDF engine here.'); }});
-
-    // Right pane: suggestions & chat
-    $$('.chip').forEach(c => c.addEventListener('click', ()=>{ $('#composer').value = c.dataset.hint; $('#composer').focus(); }));
-
-    function pushMsg(text, who='me'){
-      const d = document.createElement('div');
-      d.className = 'msg ' + (who==='me'?'me':'bot');
-      d.textContent = text;
-      $('#msgs').appendChild(d);
-      d.scrollIntoView({behavior:'smooth', block:'end'});
-    }
-
-    async function handleSend(){
-      const v = $('#composer').value.trim(); 
-      if(!v) return;
-      
-      $('#composer').value = '';
-      pushMsg(v, 'me');
-      
-      const activeTab = state.tabs.get(state.active);
-      if (!currentVectorStoreId || !activeTab || activeTab.uploading) {
-        if (activeTab && activeTab.uploading) {
-          pushMsg('Document is still uploading. Please wait for it to finish processing.', 'bot');
-        } else {
-          pushMsg('Please upload a document first or switch to a tab with an uploaded document.', 'bot');
+        function addNewDoc() {
+            const docCount = state.docs.filter(d => d.type === 'doc').length;
+            const doc = {
+                id: uid(),
+                name: `Untitled ${docCount + 1}`,
+                type: 'doc',
+                content: 'New document — start journaling...\n\n'
+            };
+            
+            state.docs.push(doc);
+            setActiveDoc(doc.id);
         }
-        return;
-      }
 
-      const loadingMsg = document.createElement('div');
-      loadingMsg.className = 'msg bot';
-      loadingMsg.textContent = '🤔 Processing...';
-      $('#msgs').appendChild(loadingMsg);
-      loadingMsg.scrollIntoView({behavior:'smooth', block:'end'});
+        async function handleFileUpload(file) {
+            const isText = /\.(txt|md|markdown)$/i.test(file.name);
+            const isPDF = /\.(pdf|docx)$/i.test(file.name);
+            
+            if (isText) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const doc = {
+                        id: uid(),
+                        name: file.name,
+                        type: 'doc',
+                        content: String(reader.result || '')
+                    };
+                    state.docs.push(doc);
+                    setActiveDoc(doc.id);
+                    
+                    // Auto-switch to Journal mode for text files
+                    state.mode = 'Journal';
+                    updateModeButtons();
+                    showToast(`📝 Loaded ${file.name} in Journal mode`);
+                };
+                reader.readAsText(file);
+            } else if (isPDF) {
+                const doc = {
+                    id: uid(),
+                    name: file.name,
+                    type: 'pdf',
+                    uploading: true
+                };
+                
+                state.docs.push(doc);
+                setActiveDoc(doc.id);
+                
+                // Auto-switch to Docs mode for PDFs
+                state.mode = 'Docs';
+                updateModeButtons();
+                showToast(`📄 Uploading ${file.name} for analysis...`);
+                
+                try {
+                    const base64Content = await fileToBase64(file);
+                    
+                    const response = await fetch(`${API_BASE}/upload`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            filename: file.name,
+                            file_content: base64Content.split(',')[1],
+                            user_id: 'web-user'
+                        })
+                    });
 
-      try {
-        const activeTab = state.tabs.get(state.active);
-        const contextualMessage = `[DOCUMENT CONTEXT: Currently viewing "${activeTab.name}". Prioritize information from this document, but you can also provide general knowledge if relevant.] ${v}`;
-        
-        const response = await fetch(`${API_BASE}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: contextualMessage }],
-            vector_store_id: currentVectorStoreId,
-            user_email: 'user@documentgpt.io'
-          })
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        const docIndex = state.docs.findIndex(d => d.id === doc.id);
+                        if (docIndex !== -1) {
+                            state.docs[docIndex].vectorStoreId = result.vector_store_id;
+                            state.docs[docIndex].uploading = false;
+                        }
+                        
+                        renderUploadedDocs();
+                        showToast(`✅ ${file.name} ready for analysis!`);
+                        addChatMessage(`📄 Document "${file.name}" is ready! Ask me anything about it, or try the AI agents below.`, 'bot');
+                    } else {
+                        showToast(`❌ Upload failed: ${result.error}`);
+                        addChatMessage(`Upload failed: ${result.error}`, 'bot');
+                    }
+                } catch (error) {
+                    addChatMessage(`Upload failed: ${error.message}`, 'bot');
+                }
+            } else {
+                showToast('Unsupported file type. Use .pdf, .txt, or .md');
+            }
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        function acceptSuggestion(id) {
+            const suggestion = state.suggestions.find(s => s.id === id);
+            if (suggestion) {
+                insertAtCursor(suggestion.text);
+                state.suggestions = state.suggestions.filter(s => s.id !== id);
+                renderSuggestions();
+            }
+        }
+
+        function rejectSuggestion(id) {
+            state.suggestions = state.suggestions.filter(s => s.id !== id);
+            renderSuggestions();
+        }
+
+        function insertAtCursor(text) {
+            const editor = document.getElementById('editor');
+            const activeDoc = getActiveDoc();
+            
+            if (activeDoc.type === 'doc') {
+                const start = editor.selectionStart ?? activeDoc.content.length;
+                const end = editor.selectionEnd ?? start;
+                const before = activeDoc.content.slice(0, start);
+                const after = activeDoc.content.slice(end);
+                const insert = (start > 0 && !/\s$/.test(before) ? " " : "") + text + (after && !/^\s/.test(after) ? " " : "");
+                
+                const newContent = before + insert + after;
+                const docIndex = state.docs.findIndex(d => d.id === state.activeId);
+                if (docIndex !== -1) {
+                    state.docs[docIndex].content = newContent;
+                    editor.value = newContent;
+                    updateAnalytics();
+                }
+                
+                setTimeout(() => {
+                    editor.focus();
+                    const caret = (before + insert).length;
+                    editor.setSelectionRange(caret, caret);
+                }, 0);
+            }
+        }
+
+        function addChatMessage(text, sender = 'user') {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            
+            if (sender === 'user') {
+                div.className = 'text-sm p-3 rounded-2xl border bg-blue-50/60 border-blue-200 ml-8';
+            } else {
+                div.className = 'text-sm p-3 rounded-2xl border bg-emerald-50/60 border-emerald-200 mr-8';
+            }
+            
+            div.textContent = text;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function sendChatMessage(message = null) {
+            const input = document.getElementById('chatInput');
+            const msg = message || input.value.trim();
+            if (!msg) return;
+            
+            const activeDoc = getActiveDoc();
+            
+            if (!message) {
+                input.value = '';
+                addChatMessage(msg, 'user');
+            }
+            
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'text-sm p-3 rounded-2xl border bg-emerald-50/60 border-emerald-200 mr-8';
+            loadingDiv.textContent = '🤔 Processing...';
+            document.getElementById('chatMessages').appendChild(loadingDiv);
+            
+            try {
+                if (activeDoc.type === 'doc') {
+                    const journalContent = activeDoc.content || '';
+                    const contextualMessage = `[JOURNAL CONTEXT: User is working on a journal entry titled "${activeDoc.name}". Current content: "${journalContent}"] ${msg}`;
+                    
+                    const response = await fetch(`${API_BASE}/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            messages: [{ role: 'user', content: contextualMessage }],
+                            user_email: 'user@documentgpt.io'
+                        })
+                    });
+
+                    const result = await response.json();
+                    loadingDiv.remove();
+                    
+                    if (response.ok) {
+                        addChatMessage(result.response, 'bot');
+                    } else {
+                        addChatMessage(`Error: ${result.error}`, 'bot');
+                    }
+                } else {
+                    if (!activeDoc.vectorStoreId) {
+                        loadingDiv.remove();
+                        addChatMessage('Please wait for document upload to complete.', 'bot');
+                        return;
+                    }
+                    
+                    const contextualMessage = `[DOCUMENT CONTEXT: Currently viewing "${activeDoc.name}". Prioritize information from this document, but you can also provide general knowledge if relevant.] ${msg}`;
+                    
+                    const response = await fetch(`${API_BASE}/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            messages: [{ role: 'user', content: contextualMessage }],
+                            vector_store_id: activeDoc.vectorStoreId,
+                            user_email: 'user@documentgpt.io'
+                        })
+                    });
+
+                    const result = await response.json();
+                    loadingDiv.remove();
+                    
+                    if (response.ok) {
+                        addChatMessage(result.response, 'bot');
+                    } else {
+                        addChatMessage(`Error: ${result.error}`, 'bot');
+                    }
+                }
+            } catch (error) {
+                loadingDiv.remove();
+                addChatMessage(`Chat failed: ${error.message}`, 'bot');
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.remove('hidden');
+            
+            // Auto-hide based on message type
+            const hideDelay = message.includes('working') ? 1000 : 
+                             message.includes('completed') ? 3000 : 2000;
+            
+            setTimeout(() => toast.classList.add('hidden'), hideDelay);
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            setActiveDoc(state.activeId);
+            
+            // File input
+            document.getElementById('fileInput').addEventListener('change', (e) => {
+                if (e.target.files[0]) {
+                    handleFileUpload(e.target.files[0]);
+                    e.target.value = '';
+                }
+            });
+            
+            // Buttons
+            document.getElementById('uploadBtn').addEventListener('click', () => {
+                document.getElementById('fileInput').click();
+            });
+            document.getElementById('newBtn').addEventListener('click', addNewDoc);
+            document.getElementById('addTabBtn').addEventListener('click', addNewDoc);
+            
+            // Mode buttons
+            document.getElementById('journalMode').addEventListener('click', () => {
+                state.mode = 'Journal';
+                updateModeButtons();
+            });
+            document.getElementById('docsMode').addEventListener('click', () => {
+                state.mode = 'Docs';
+                updateModeButtons();
+            });
+            
+            // Chat
+            document.getElementById('sendBtn').addEventListener('click', () => sendChatMessage());
+            document.getElementById('chatInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendChatMessage();
+                }
+            });
+            
+            // Editor
+            document.getElementById('editor').addEventListener('input', (e) => {
+                const docIndex = state.docs.findIndex(d => d.id === state.activeId);
+                if (docIndex !== -1) {
+                    state.docs[docIndex].content = e.target.value;
+                    updateAnalytics();
+                    startLiveAnalysis(); // Trigger live analysis
+                }
+            });
+            
+            // Zoom
+            document.getElementById('zoomIn').addEventListener('click', () => {
+                state.scale = Math.min(1.5, +(state.scale + 0.1).toFixed(2));
+                document.getElementById('zoomLabel').textContent = Math.round(state.scale * 100) + '%';
+                setActiveDoc(state.activeId);
+            });
+            
+            document.getElementById('zoomOut').addEventListener('click', () => {
+                state.scale = Math.max(0.8, +(state.scale - 0.1).toFixed(2));
+                document.getElementById('zoomLabel').textContent = Math.round(state.scale * 100) + '%';
+                setActiveDoc(state.activeId);
+            });
+            
+            // Focus mode
+            document.getElementById('focusBtn').addEventListener('click', () => {
+                state.focus = !state.focus;
+                const sidebar = document.getElementById('sidebar');
+                const assistant = document.getElementById('assistant');
+                
+                if (state.focus) {
+                    sidebar.classList.add('hidden');
+                    assistant.classList.add('hidden');
+                    document.getElementById('focusBtn').textContent = 'Exit focus';
+                } else {
+                    sidebar.classList.remove('hidden');
+                    assistant.classList.remove('hidden');
+                    document.getElementById('focusBtn').textContent = 'Focus mode';
+                }
+            });
+            
+            // Theme
+            document.getElementById('themeBtn').addEventListener('click', () => {
+                state.theme = state.theme === 'light' ? 'dark' : 'light';
+                document.getElementById('themeBtn').textContent = state.theme === 'light' ? '🌞 Light' : '🌙 Dark';
+                
+                if (state.theme === 'dark') {
+                    document.body.className = 'h-screen w-full font-inter bg-slate-950 text-slate-100';
+                } else {
+                    document.body.className = 'h-screen w-full font-inter';
+                }
+            });
+            
+            // Live Assistant
+            document.getElementById('liveToggle').addEventListener('change', (e) => {
+                state.liveAssistant = e.target.checked;
+                const status = document.getElementById('liveStatus');
+                status.className = state.liveAssistant ? 'w-2 h-2 rounded-full bg-emerald-500' : 'w-2 h-2 rounded-full bg-gray-400';
+                renderSuggestions();
+                if (state.liveAssistant) {
+                    startLiveAnalysis();
+                }
+            });
+            
+            // Modals
+            document.getElementById('paletteBtn').addEventListener('click', () => {
+                document.getElementById('palette').classList.toggle('hidden');
+            });
+            
+            document.getElementById('settingsBtn').addEventListener('click', () => {
+                document.getElementById('settings').classList.toggle('hidden');
+            });
+            
+            document.getElementById('settingsBtn2').addEventListener('click', () => {
+                document.getElementById('settings').classList.toggle('hidden');
+            });
+            
+            document.getElementById('closeSettings').addEventListener('click', () => {
+                document.getElementById('settings').classList.add('hidden');
+            });
+            
+            // Close modals on outside click
+            document.getElementById('palette').addEventListener('click', (e) => {
+                if (e.target === e.currentTarget) {
+                    document.getElementById('palette').classList.add('hidden');
+                }
+            });
+            
+            document.getElementById('settings').addEventListener('click', (e) => {
+                if (e.target === e.currentTarget) {
+                    document.getElementById('settings').classList.add('hidden');
+                }
+            });
+            
+            // AI Agents
+            document.getElementById('emailAgent').addEventListener('click', () => {
+                const activeDoc = getActiveDoc();
+                executeAgent('Email', activeDoc.content || '');
+            });
+            
+            document.getElementById('sheetsAgent').addEventListener('click', () => {
+                const activeDoc = getActiveDoc();
+                executeAgent('Sheets', activeDoc.content || '');
+            });
+            
+            document.getElementById('calendarAgent').addEventListener('click', () => {
+                const activeDoc = getActiveDoc();
+                executeAgent('Calendar', activeDoc.content || '');
+            });
+            
+            document.getElementById('saveAgent').addEventListener('click', () => {
+                const activeDoc = getActiveDoc();
+                executeAgent('Save', activeDoc.content || '');
+            });
+            
+            document.getElementById('exportAgent').addEventListener('click', () => {
+                const activeDoc = getActiveDoc();
+                executeAgent('Export', activeDoc.content || '');
+            });
+            
+            document.getElementById('summaryAgent').addEventListener('click', () => {
+                const activeDoc = getActiveDoc();
+                executeAgent('Summary', activeDoc.content || '');
+            });
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                    e.preventDefault();
+                    document.getElementById('palette').classList.toggle('hidden');
+                }
+            });
         });
 
-        const result = await response.json();
-        loadingMsg.remove();
+        // Live AI Assistant
+        let liveTimeout;
         
-        if (response.ok) {
-          pushMsg(result.response, 'bot');
-        } else {
-          pushMsg('❌ Error: ' + result.error, 'bot');
+        function startLiveAnalysis() {
+            if (!state.liveAssistant) return;
+            
+            clearTimeout(liveTimeout);
+            liveTimeout = setTimeout(() => {
+                const activeDoc = getActiveDoc();
+                if (activeDoc.type === 'doc' && activeDoc.content) {
+                    analyzeLiveWriting(activeDoc.content);
+                }
+            }, 3000); // Analyze after 3 seconds of no typing
         }
-      } catch (error) {
-        loadingMsg.remove();
-        pushMsg('❌ Chat failed: ' + error.message, 'bot');
-      }
-    }
+        
+        async function analyzeLiveWriting(content) {
+            if (!state.liveAssistant || content.length < 20) return;
+            
+            // Show analyzing indicator
+            const statusEl = document.getElementById('liveStatus');
+            const statusTextEl = document.getElementById('liveStatusText');
+            statusEl.className = 'w-2 h-2 rounded-full bg-yellow-500 animate-pulse';
+            statusTextEl.textContent = 'Analyzing...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/live-assist`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        content: content,
+                        user_id: 'web-user'
+                    })
+                });
 
-    $('#sendBtn').addEventListener('click', handleSend);
-    $('#composer').addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); handleSend(); }});
+                const result = await response.json();
+                
+                if (response.ok && result.suggestions && result.suggestions.length > 0) {
+                    // Replace old live suggestions
+                    state.suggestions = state.suggestions.filter(s => s.type !== 'live');
+                    
+                    result.suggestions.forEach((suggestion, index) => {
+                        state.suggestions.unshift({
+                            id: 'live_' + Date.now() + '_' + index,
+                            text: suggestion,
+                            type: 'live'
+                        });
+                    });
+                    
+                    renderSuggestions();
+                    
+                    // Show success indicator
+                    statusEl.className = 'w-2 h-2 rounded-full bg-emerald-500';
+                    statusTextEl.textContent = 'Ready';
+                } else {
+                    // No suggestions
+                    statusEl.className = 'w-2 h-2 rounded-full bg-emerald-500';
+                    statusTextEl.textContent = 'Ready';
+                }
+            } catch (error) {
+                console.log('Live analysis failed:', error);
+                statusEl.className = 'w-2 h-2 rounded-full bg-red-500';
+                statusTextEl.textContent = 'Error';
+                setTimeout(() => {
+                    statusEl.className = 'w-2 h-2 rounded-full bg-emerald-500';
+                    statusTextEl.textContent = 'Ready';
+                }, 3000);
+            }
+        }
+        
+        // AI Agents
+        async function executeAgent(agentType, content) {
+            showToast(`🤖 ${agentType} agent working...`);
+            
+            try {
+                const response = await fetch(`${API_BASE}/agent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        agent_type: agentType.toLowerCase(),
+                        content: content,
+                        user_email: 'user@documentgpt.io'
+                    })
+                });
 
-    // Palette
-    const palette = $('#palette');
-    const openPalette = () => { palette.classList.add('show'); $('#paletteInput').focus(); }
-    const closePalette = () => { palette.classList.remove('show'); }
-
-    $('#globalSearch').addEventListener('focus', openPalette);
-    document.addEventListener('keydown', e=>{
-      const k = (e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='k';
-      if(k){ e.preventDefault(); openPalette(); }
-      if(e.key==='Escape') closePalette();
-    });
-    palette.addEventListener('click', e=>{ if(e.target===palette) closePalette(); });
-    $('#paletteItems').addEventListener('click', e=>{
-      const row = e.target.closest('.row'); if(!row) return; const cmd=row.dataset.cmd; closePalette();
-      switch(cmd){
-        case 'upload': fileInput.click(); break;
-        case 'summarize': $('#composer').value = 'Summarize this document'; handleSend(); break;
-        case 'keypoints': $('#composer').value = 'What are the key points?'; handleSend(); break;
-        case 'numbers': $('#composer').value = 'List all totals with currency and dates'; handleSend(); break;
-        case 'theme': $('#themeBtn').click(); break;
-        case 'zen': $('#zenBtn').click(); break;
-        case 'newtab': $('#addTab').click(); break;
-        case 'share': shareActive(); break;
-      }
-    });
-
-    // Share (mock)
-    function shareActive(){
-      const active = $('#tabs .tab.active');
-      toast('Share link created for: ' + (active ? active.textContent.replace('✕','').trim() : 'current tab'));
-    }
-    $('#shareBtn').addEventListener('click', shareActive);
-
-    // Clear chat
-    $('#clearChat').addEventListener('click', ()=>{ 
-      $('#msgs').innerHTML = '<div class="msg bot">Upload a document to start analyzing it. I can summarize, extract key information, and answer questions about your documents.</div>';
-    });
-
-    // Toasts
-    let toastTimer; function toast(text){
-      let el = $('#toast');
-      if(!el){
-        el = document.createElement('div'); el.id='toast';
-        el.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);padding:.6rem .8rem;border-radius:12px;border:1px solid var(--border);background:linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.55));backdrop-filter:blur(8px);box-shadow:var(--shadow-1);z-index:999;';
-        document.body.appendChild(el);
-      }
-      el.textContent = text; el.style.display='block'; clearTimeout(toastTimer); toastTimer = setTimeout(()=> el.style.display='none', 1800);
-    }
-
-    // Accessibility: focus ring
-    document.addEventListener('keydown', e=>{ if(e.key==='Tab'){ document.body.classList.add('show-focus'); }});
-  </script>
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showToast(`✅ ${agentType} completed! Check chat below.`);
+                    
+                    // Add result with better formatting
+                    const chatContainer = document.getElementById('chatMessages');
+                    const div = document.createElement('div');
+                    div.className = 'text-sm p-3 rounded-2xl border bg-blue-50/60 border-blue-200 mr-8';
+                    div.innerHTML = `
+                        <div class="font-medium text-blue-800 mb-2">🤖 ${agentType} Agent Result:</div>
+                        <div class="whitespace-pre-wrap">${result.result}</div>
+                    `;
+                    chatContainer.appendChild(div);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    
+                    // Highlight the new message briefly
+                    div.style.boxShadow = '0 0 10px rgba(59, 130, 246, 0.5)';
+                    setTimeout(() => {
+                        div.style.boxShadow = '';
+                    }, 2000);
+                } else {
+                    showToast(`❌ ${agentType} failed: ${result.error}`);
+                }
+            } catch (error) {
+                showToast(`❌ ${agentType} error: ${error.message}`);
+            }
+        }
+        
+        // Global functions
+        window.closeTab = closeTab;
+        window.acceptSuggestion = acceptSuggestion;
+        window.rejectSuggestion = rejectSuggestion;
+    </script>
 </body>
 </html>

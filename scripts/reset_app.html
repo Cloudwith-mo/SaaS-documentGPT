@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head><title>Reset App</title></head>
+<body style="font-family: sans-serif; padding: 40px; max-width: 600px; margin: 0 auto;">
+<h1>🔧 Reset DocumentGPT</h1>
+<p>This will clear all localStorage and reset the app to default state.</p>
+<button onclick="reset()" style="background: #10b981; color: white; padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer;">Reset Now</button>
+<pre id="log" style="background: #f3f4f6; padding: 20px; margin-top: 20px; border-radius: 8px;"></pre>
+<script>
+function reset() {
+    const log = document.getElementById('log');
+    log.textContent = 'Clearing localStorage...\n';
+    
+    localStorage.clear();
+    log.textContent += '✅ localStorage cleared\n\n';
+    
+    const defaultState = {
+        user: null,
+        docs: [{id: 'doc1', name: 'Welcome', content: 'Start writing...'}],
+        folders: [],
+        activeId: 'doc1',
+        usage: {chats_used: 0, documents_uploaded: 0},
+        limits: {chats: 50, documents: 10},
+        zoom: 1,
+        focus: false,
+        chatHistory: {},
+        docInsights: {},
+        docHighlights: {},
+        versions: {}
+    };
+    
+    localStorage.setItem('dgpt:state:v3', JSON.stringify(defaultState));
+    log.textContent += '✅ Default state created\n\n';
+    
+    const guestId = 'guest_' + Math.random().toString(36).slice(2, 11);
+    localStorage.setItem('guest_id', guestId);
+    log.textContent += '✅ Guest ID: ' + guestId + '\n\n';
+    
+    log.textContent += '🎉 DONE! Now visit:\n';
+    log.textContent += '- DEV: https://documentgpt.io/backup-unified.html\n';
+    log.textContent += '- STG: https://documentgpt.io/backup.html\n';
+    log.textContent += '- PRD: https://documentgpt.io/\n';
+}
+</script>
+</body>
+</html>

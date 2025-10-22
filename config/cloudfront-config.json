@@ -1,0 +1,62 @@
+{
+  "Comment": "DocumentGPT CloudFront CDN for static files",
+  "Enabled": true,
+  "Origins": [
+    {
+      "Id": "S3-documentgpt-website",
+      "DomainName": "documentgpt-website-prod.s3.amazonaws.com",
+      "S3OriginConfig": {
+        "OriginAccessIdentity": ""
+      }
+    }
+  ],
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "S3-documentgpt-website",
+    "ViewerProtocolPolicy": "redirect-to-https",
+    "AllowedMethods": ["GET", "HEAD", "OPTIONS"],
+    "CachedMethods": ["GET", "HEAD"],
+    "Compress": true,
+    "MinTTL": 0,
+    "DefaultTTL": 86400,
+    "MaxTTL": 31536000,
+    "ForwardedValues": {
+      "QueryString": false,
+      "Cookies": {
+        "Forward": "none"
+      }
+    }
+  },
+  "CacheBehaviors": [
+    {
+      "PathPattern": "*.html",
+      "TargetOriginId": "S3-documentgpt-website",
+      "ViewerProtocolPolicy": "redirect-to-https",
+      "Compress": true,
+      "MinTTL": 0,
+      "DefaultTTL": 3600,
+      "MaxTTL": 86400
+    },
+    {
+      "PathPattern": "*.js",
+      "TargetOriginId": "S3-documentgpt-website",
+      "ViewerProtocolPolicy": "redirect-to-https",
+      "Compress": true,
+      "MinTTL": 0,
+      "DefaultTTL": 604800,
+      "MaxTTL": 31536000
+    },
+    {
+      "PathPattern": "*.css",
+      "TargetOriginId": "S3-documentgpt-website",
+      "ViewerProtocolPolicy": "redirect-to-https",
+      "Compress": true,
+      "MinTTL": 0,
+      "DefaultTTL": 604800,
+      "MaxTTL": 31536000
+    }
+  ],
+  "PriceClass": "PriceClass_100",
+  "ViewerCertificate": {
+    "CloudFrontDefaultCertificate": true
+  }
+}

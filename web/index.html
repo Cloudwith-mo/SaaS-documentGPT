@@ -3,1110 +3,547 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocumentGPT - AI Writing Assistant</title>
+    <title>DocumentGPT - Your AI Research & Writing Superpower</title>
+    <meta name="description" content="Write faster with AI. Upload PDFs, chat with documents, and get instant insights. Trusted by students and researchers worldwide.">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1563.0.min.js"></script>
-    <script src="https://unpkg.com/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
     <style>
-        body[data-theme="dark"] { background: #1a1a1a; color: #e5e5e5; }
-        body[data-theme="dark"] aside, body[data-theme="dark"] main { border-color: #333; }
-        body[data-theme="dark"] .bg-white { background: #262626 !important; }
-        body[data-theme="dark"] #editor, body[data-theme="dark"] #chatMessages { background: #262626; color: #e5e5e5; }
-        body[data-theme="dark"] .border { border-color: #333; }
-        body[data-theme="dark"] input, body[data-theme="dark"] textarea { background: #333; color: #e5e5e5; }
-        .tab-active { background: #10b981 !important; color: white !important; }
-        #editor u { text-decoration: underline !important; }
-        #editor strong, #editor b { font-weight: 900 !important; color: inherit !important; }
-        #editor[contenteditable="false"] { background: #e5e5e5; cursor: default; padding: 40px 20px; }
-        #editor em, #editor i { font-style: italic !important; color: inherit !important; }
-        #editor ul { list-style: disc !important; margin-left: 20px; color: #000 !important; }
-        #editor ol { list-style: decimal !important; margin-left: 20px; color: #000 !important; }
-        #editor li { margin: 4px 0; color: #000 !important; display: list-item !important; }
-        .focus-mode #leftSidebar, .focus-mode #rightSidebar { display: none !important; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-text { background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     </style>
 </head>
-<body data-theme="light" class="h-screen w-full font-sans">
-    <div id="app" class="flex h-screen w-full overflow-hidden">
-        <aside id="leftSidebar" class="w-60 border-r flex flex-col">
-            <div class="px-3 py-2 border-b flex items-center justify-between">
-                <span class="text-sm font-semibold text-emerald-500">DocumentGPT</span>
-                <span class="text-[10px] opacity-50">⌘K</span>
-            </div>
-            <div class="p-3 flex gap-2">
-                <button id="uploadBtn" class="flex-1 rounded-xl border px-3 py-2 text-sm hover:shadow-sm">Upload</button>
-                <button id="newBtn" class="flex-1 rounded-xl border px-3 py-2 text-sm hover:shadow-sm border-emerald-500 text-emerald-500">New</button>
-            </div>
-            <div class="px-3 pt-1 text-xs uppercase opacity-60 flex justify-between items-center">
-                <span>My Documents</span>
-                <button id="newFolderBtn" class="text-[10px] px-1 rounded border hover:bg-gray-100">📁+</button>
-            </div>
-            <div id="foldersContainer" class="px-2 pb-2 space-y-1 overflow-auto max-h-40"></div>
-            <div id="docsList" class="px-2 pb-2 space-y-1 overflow-auto flex-1"></div>
-            <div class="border-t p-3">
-                <div class="text-xs uppercase opacity-60 mb-2">Current Plan</div>
-                <div class="flex items-baseline gap-2 mb-2">
-                    <div class="text-lg font-bold text-emerald-600" id="planName">Free</div>
-                    <div class="text-xs opacity-60" id="planPrice">$0/mo</div>
+<body class="bg-white text-gray-900">
+    
+    <!-- Header -->
+    <header class="fixed top-0 w-full bg-white/90 backdrop-blur-sm border-b border-gray-200 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500"></div>
+                    <span class="text-xl font-bold">DocumentGPT</span>
                 </div>
-                <div class="space-y-1 mb-2">
-                    <div class="flex justify-between text-xs opacity-60">
-                        <span>Chats</span>
-                        <span id="chatUsage">0/25</span>
-                    </div>
-                    <div class="h-1.5 bg-gray-200 rounded-full">
-                        <div id="chatBar" class="h-full bg-emerald-500 transition-all" style="width: 0%"></div>
-                    </div>
-                    <div class="flex justify-between text-xs opacity-60">
-                        <span>Docs</span>
-                        <span id="docUsage">0/5</span>
-                    </div>
-                    <div class="h-1.5 bg-gray-200 rounded-full">
-                        <div id="docBar" class="h-full bg-cyan-500 transition-all" style="width: 0%"></div>
-                    </div>
-                </div>
-                <button id="upgradeBtn" class="w-full text-xs px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white hover:opacity-90">Upgrade</button>
-                <div class="mt-2 flex gap-2">
-                    <button id="loginBtn" class="flex-1 text-xs px-2 py-1 rounded-lg border hover:shadow-sm">Login</button>
-                    <button id="signupBtn" class="flex-1 text-xs px-2 py-1 rounded-lg border border-emerald-500 text-emerald-500 hover:shadow-sm">Sign Up</button>
-                </div>
-                <div class="mt-2 flex items-center gap-2 text-xs">
-                    <button id="healthBtn" class="px-2 py-1 rounded border border-emerald-500 text-emerald-500 hover:shadow-sm">📊</button>
-                    <button id="paletteBtn" class="px-2 py-1 rounded border hover:shadow-sm">⌘K</button>
-                    <button id="settingsBtn" class="px-2 py-1 rounded border hover:shadow-sm">⚙︎</button>
+                <nav class="hidden md:flex items-center gap-8">
+                    <a href="/pricing.html" class="text-sm text-gray-600 hover:text-gray-900">Pricing</a>
+                    <a href="/teams.html" class="text-sm text-gray-600 hover:text-gray-900">Teams</a>
+                    <a href="/about.html" class="text-sm text-gray-600 hover:text-gray-900">About</a>
+                    <a href="/blog/index.html" class="text-sm text-gray-600 hover:text-gray-900">Blog</a>
+                </nav>
+                <div class="flex items-center gap-3">
+                    <a href="/app.html" class="text-sm text-gray-600 hover:text-gray-900">Sign in</a>
+                    <a href="/app.html" class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-semibold rounded-lg hover:opacity-90">Start writing</a>
                 </div>
             </div>
-        </aside>
+        </div>
+    </header>
 
-        <main class="flex-1 flex flex-col">
-            <div class="flex items-center gap-2 px-3 py-2 border-b">
-                <div id="tabsContainer" class="flex items-center gap-1 overflow-x-auto flex-1"></div>
-                <button id="addTabBtn" class="text-xs px-2 py-1 rounded-full border hover:shadow-sm">+</button>
-                <div class="flex items-center gap-2 border rounded-xl px-2 py-1 text-xs">
-                    <input id="findInput" placeholder="Find..." class="bg-transparent outline-none w-32" autocomplete="off" />
-                    <button id="findBtn" class="text-emerald-500">🔍</button>
-                </div>
-                <div class="flex items-center gap-1 text-xs">
-                    <button id="zoomOut" class="px-2 py-1 rounded-lg border">−</button>
-                    <div id="zoomLabel" class="w-10 text-center">100%</div>
-                    <button id="zoomIn" class="px-2 py-1 rounded-lg border">+</button>
-                </div>
-                <button id="focusBtn" class="text-xs px-2 py-1 rounded-lg border">Focus</button>
-                <button id="themeBtn" class="text-xs px-2 py-1 rounded-lg border">🌞</button>
+    <!-- Hero -->
+    <section class="pt-32 pb-20 px-4">
+        <div class="max-w-6xl mx-auto text-center">
+            <div class="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-sm text-emerald-700 mb-6">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                Trusted by 10,000+ researchers
             </div>
-            <div class="flex-1 overflow-auto p-4">
-                <div class="mx-auto max-w-4xl h-full">
-                    <div id="editorContainer" class="h-full flex flex-col rounded-2xl border shadow-sm bg-white" style="transform-origin: top center;">
-                        <div id="formatToolbar" class="px-3 py-2 border-b flex items-center gap-1 flex-wrap">
-                            <button id="boldBtn" class="p-1.5 hover:bg-gray-100 rounded" title="Bold (Ctrl+B)"><strong>B</strong></button>
-                            <button id="italicBtn" class="p-1.5 hover:bg-gray-100 rounded" title="Italic (Ctrl+I)"><em>I</em></button>
-                            <button id="underlineBtn" class="p-1.5 hover:bg-gray-100 rounded" title="Underline (Ctrl+U)"><u>U</u></button>
-                            <div class="w-px h-6 bg-gray-300 mx-1"></div>
-                            <select id="fontSizeSelect" class="text-xs border rounded px-2 py-1">
-                                <option value="">Size</option>
-                                <option value="1">Small</option>
-                                <option value="3">Normal</option>
-                                <option value="5">Large</option>
-                            </select>
-                            <div class="w-px h-6 bg-gray-300 mx-1"></div>
-                            <button id="bulletBtn" class="p-1.5 hover:bg-gray-100 rounded" title="Bullet List">•</button>
-                            <button id="numberBtn" class="p-1.5 hover:bg-gray-100 rounded" title="Numbered List">1.</button>
-                            <button id="indentBtn" class="p-1.5 hover:bg-gray-100 rounded" title="Indent">→</button>
-                            <button id="outdentBtn" class="p-1.5 hover:bg-gray-100 rounded" title="Outdent">←</button>
-                            <div class="w-px h-6 bg-gray-300 mx-1"></div>
-                            <button id="alignLeftBtn" class="p-1.5 hover:bg-gray-100 rounded" title="Align Left">⫷</button>
-                            <button id="alignCenterBtn" class="p-1.5 hover:bg-gray-100 rounded" title="Align Center">⫸</button>
-                            <button id="alignRightBtn" class="p-1.5 hover:bg-gray-100 rounded" title="Align Right">⫸</button>
-                        </div>
-                        <div id="editor" contenteditable="true" class="flex-1 overflow-auto px-6 py-4 text-base leading-7 outline-none"></div>
-                        <div class="px-4 py-2 border-t flex gap-4 text-xs opacity-60">
-                            <span>Words: <b id="wordCount">0</b></span>
-                            <span>Read: <b id="readTime">1m</b></span>
-                            <span>Tone: <b id="tone">Neutral</b></span>
-                            <span>Readability: <b id="readability">74</b></span>
-                            <span class="ml-auto text-emerald-500" id="saveStatus">Saved</span>
+            <h1 class="text-5xl md:text-7xl font-extrabold leading-tight mb-6">
+                Your AI research &<br/>
+                <span class="gradient-text">writing superpower</span>
+            </h1>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto mb-8">
+                Upload PDFs, chat with your documents, and write faster with AI assistance. From research papers to journal entries.
+            </p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+                <a href="/app.html" class="px-8 py-4 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-lg hover:opacity-90 text-lg">
+                    Start writing for free
+                </a>
+                <a href="#demo" class="px-8 py-4 border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:border-gray-400 text-lg">
+                    Watch demo
+                </a>
+            </div>
+            <p class="text-sm text-gray-500">Free forever • No credit card • Start in 30 seconds</p>
+        </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="py-20 px-4 bg-white">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="text-3xl font-bold text-center mb-12">Loved by researchers and writers</h2>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-12 h-12 bg-gradient-to-br from-emerald-400 to-cyan-400 rounded-full flex items-center justify-center text-white font-bold">AM</div>
+                        <div>
+                            <div class="font-semibold">Alex Martinez</div>
+                            <div class="text-sm text-gray-600">PhD Candidate, MIT</div>
                         </div>
                     </div>
+                    <div class="text-yellow-500 mb-3">⭐⭐⭐⭐⭐</div>
+                    <p class="text-gray-700">"Analyzed 30 research papers in 2 hours. Game changer for my literature review."</p>
                 </div>
-            </div>
-        </main>
-
-        <aside id="rightSidebar" class="w-96 border-l flex flex-col">
-            <div class="px-3 py-2 border-b">
-                <div class="text-sm font-medium">Assistant</div>
-            </div>
-            <div id="chatMessages" class="flex-1 overflow-auto p-3 space-y-2">
-                <div class="text-sm p-3 rounded-2xl border bg-emerald-50">
-                    I'm here to help you write better or analyze documents. Start typing or upload a file!
-                </div>
-            </div>
-            <div class="px-3 py-2 border-t flex gap-1">
-                <span class="text-xs opacity-50">Agents:</span>
-                <button id="summaryAgent" class="text-lg hover:scale-110 transition" title="Summary">📝</button>
-                <button id="emailAgent" class="text-lg hover:scale-110 transition" title="Email">📧</button>
-                <button id="sheetsAgent" class="text-lg hover:scale-110 transition" title="Sheets">📊</button>
-                <button id="calendarAgent" class="text-lg hover:scale-110 transition" title="Calendar">📅</button>
-                <button id="saveAgent" class="text-lg hover:scale-110 transition" title="Save">💾</button>
-                <button id="exportAgent" class="text-lg hover:scale-110 transition" title="Export">📤</button>
-            </div>
-            <div class="p-3 flex gap-2">
-                <textarea id="chatInput" placeholder="Ask anything..." class="flex-1 rounded-xl border p-3 text-sm resize-none" rows="3"></textarea>
-                <button id="sendBtn" class="rounded-xl px-4 py-3 bg-emerald-500 text-white hover:bg-emerald-600">➤</button>
-            </div>
-        </aside>
-    </div>
-
-    <div id="palette" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden items-center justify-center" style="z-index: 100;">
-        <div class="bg-white rounded-2xl shadow-2xl w-[600px] max-h-[500px] flex flex-col">
-            <div class="px-4 py-3 border-b flex items-center justify-between">
-                <span class="text-sm font-semibold">Command Palette</span>
-                <button onclick="hideModal('palette')" class="text-2xl opacity-50 hover:opacity-100">&times;</button>
-            </div>
-            <input id="paletteInput" placeholder="Type a command..." class="w-full px-4 py-3 border-b outline-none" />
-            <div id="paletteItems" class="overflow-auto p-2">
-                <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 text-sm" data-cmd="new">📄 New document</button>
-                <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 text-sm" data-cmd="upload">📤 Upload file</button>
-                <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 text-sm" data-cmd="summary">📝 Summarize</button>
-                <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 text-sm" data-cmd="sheets">📊 Extract to CSV</button>
-                <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 text-sm" data-cmd="email">📧 Send Email</button>
-                <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 text-sm" data-cmd="export">📤 Export Document</button>
-                <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 text-sm" data-cmd="theme">🌓 Toggle Theme</button>
-                <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 text-sm" data-cmd="focus">👁️ Toggle Focus</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="upgradeModal" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden items-center justify-center" style="z-index: 100;">
-        <div class="bg-white rounded-2xl shadow-2xl w-[700px] p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold">Choose Your Plan</h2>
-                <button id="closeUpgrade" class="text-2xl opacity-50 hover:opacity-100">×</button>
-            </div>
-            <div class="grid grid-cols-3 gap-4">
-                <div class="border rounded-xl p-4">
-                    <div class="text-xs uppercase text-emerald-600 font-semibold mb-2">Starter</div>
-                    <div class="text-2xl font-bold mb-1">$1.99<span class="text-sm text-gray-500">/mo</span></div>
-                    <div class="space-y-2 text-xs mb-4">
-                        <div>✓ 50 chats/month</div>
-                        <div>✓ 5 documents</div>
-                        <div>✓ Basic agents</div>
+                <div class="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-12 h-12 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-white font-bold">SC</div>
+                        <div>
+                            <div class="font-semibold">Sarah Chen</div>
+                            <div class="text-sm text-gray-600">Content Writer</div>
+                        </div>
                     </div>
-                    <button class="selectPlan w-full text-xs px-3 py-2 rounded-lg border border-emerald-500 text-emerald-500 hover:bg-emerald-50" data-plan="starter">Start Trial</button>
+                    <div class="text-yellow-500 mb-3">⭐⭐⭐⭐⭐</div>
+                    <p class="text-gray-700">"The streaming responses feel so natural. Best AI writing tool I've used."</p>
                 </div>
-                <div class="border-2 border-emerald-500 rounded-xl p-4 relative">
-                    <div class="absolute -top-2 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">POPULAR</div>
-                    <div class="text-xs uppercase text-emerald-600 font-semibold mb-2">Pro</div>
-                    <div class="text-2xl font-bold mb-1">$12.99<span class="text-sm text-gray-500">/mo</span></div>
-                    <div class="space-y-2 text-xs mb-4">
-                        <div>✓ Unlimited chats</div>
-                        <div>✓ 30 documents</div>
-                        <div>✓ All 6 agents</div>
-                        <div>✓ Priority support</div>
+                <div class="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-12 h-12 bg-gradient-to-br from-blue-400 to-indigo-400 rounded-full flex items-center justify-center text-white font-bold">JW</div>
+                        <div>
+                            <div class="font-semibold">James Wilson</div>
+                            <div class="text-sm text-gray-600">Graduate Student, Stanford</div>
+                        </div>
                     </div>
-                    <button class="selectPlan w-full text-xs px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white hover:opacity-90" data-plan="pro">Upgrade to Pro</button>
+                    <div class="text-yellow-500 mb-3">⭐⭐⭐⭐⭐</div>
+                    <p class="text-gray-700">"Saved 10+ hours on my thesis. The PDF chat feature is incredible."</p>
                 </div>
-                <div class="border rounded-xl p-4">
-                    <div class="text-xs uppercase text-emerald-600 font-semibold mb-2">Business</div>
-                    <div class="text-2xl font-bold mb-1">$29.99<span class="text-sm text-gray-500">/mo</span></div>
-                    <div class="space-y-2 text-xs mb-4">
-                        <div>✓ Unlimited everything</div>
-                        <div>✓ All agents</div>
-                        <div>✓ Premium support</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Social Proof -->
+    <section class="py-16 border-y border-gray-200 bg-white overflow-hidden">
+        <div class="max-w-7xl mx-auto px-4">
+            <p class="text-center text-xs font-semibold text-gray-500 uppercase tracking-wider mb-10">Trusted by universities and businesses across the world</p>
+            <div class="relative">
+                <div class="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-white to-transparent z-10"></div>
+                <div class="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-white to-transparent z-10"></div>
+                <div class="flex animate-scroll">
+                    <div class="flex gap-16 items-center px-8">
+                        <img src="https://cdn.simpleicons.org/google/4285F4" alt="Google" class="h-8 opacity-40 hover:opacity-60 transition">
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Penn</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Cambridge</span>
+                        </div>
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/0/0c/MIT_logo.svg" alt="MIT" class="h-8 opacity-40 hover:opacity-60 transition">
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Aston</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Stanford</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Harvard</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Oxford</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Yale</span>
+                        </div>
+                        <img src="https://cdn.simpleicons.org/amazon/FF9900" alt="Amazon" class="h-8 opacity-40 hover:opacity-60 transition">
                     </div>
-                    <button class="selectPlan w-full text-xs px-3 py-2 rounded-lg border border-emerald-500 text-emerald-500 hover:bg-emerald-50" data-plan="business">Go Business</button>
+                    <div class="flex gap-16 items-center px-8">
+                        <img src="https://cdn.simpleicons.org/google/4285F4" alt="Google" class="h-8 opacity-40 hover:opacity-60 transition">
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Penn</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Cambridge</span>
+                        </div>
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/0/0c/MIT_logo.svg" alt="MIT" class="h-8 opacity-40 hover:opacity-60 transition">
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Aston</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Stanford</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Harvard</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Oxford</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-xl font-bold text-gray-400">Yale</span>
+                        </div>
+                        <img src="https://cdn.simpleicons.org/amazon/FF9900" alt="Amazon" class="h-8 opacity-40 hover:opacity-60 transition">
+                    </div>
                 </div>
             </div>
-            <div class="text-center text-xs text-gray-500 mt-4">Cancel anytime • Secure payment via Stripe</div>
         </div>
-    </div>
+    </section>
+    <style>
+        @keyframes scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .animate-scroll {
+            animation: scroll 40s linear infinite;
+        }
+        .animate-scroll:hover {
+            animation-play-state: paused;
+        }
+    </style>
 
-    <div id="loginModal" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden items-center justify-center" style="z-index: 100;">
-        <div class="bg-white rounded-2xl shadow-2xl w-[400px] p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-bold">Login to DocumentGPT</h2>
-                <button id="closeLogin" class="text-2xl opacity-50 hover:opacity-100">×</button>
+    <!-- Stats Counter -->
+    <section class="py-20 px-4 bg-white">
+        <div class="max-w-6xl mx-auto">
+            <div class="grid md:grid-cols-4 gap-8 text-center">
+                <div>
+                    <div class="text-4xl font-bold text-emerald-600 mb-2">75,000+</div>
+                    <div class="text-gray-600">Documents Analyzed</div>
+                </div>
+                <div>
+                    <div class="text-4xl font-bold text-cyan-600 mb-2">250,000+</div>
+                    <div class="text-gray-600">AI Chats Completed</div>
+                </div>
+                <div>
+                    <div class="text-4xl font-bold text-indigo-600 mb-2">50,000+</div>
+                    <div class="text-gray-600">Hours Saved</div>
+                </div>
+                <div>
+                    <div class="text-4xl font-bold text-purple-600 mb-2">4.8/5</div>
+                    <div class="text-gray-600">Rating (1,200+ users)</div>
+                </div>
             </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="py-24 px-4">
+        <div class="max-w-6xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl font-bold mb-4">Everything you need to write better</h2>
+                <p class="text-xl text-gray-600">Powerful AI tools that actually help you think and write</p>
+            </div>
+            
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="p-6 rounded-2xl border border-gray-200 hover:border-emerald-300 hover:shadow-lg transition">
+                    <div class="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center mb-4">
+                        <span class="text-2xl">📄</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Chat with PDFs</h3>
+                    <p class="text-gray-600">Upload research papers and ask questions. Get instant answers with citations.</p>
+                </div>
+
+                <div class="p-6 rounded-2xl border border-gray-200 hover:border-emerald-300 hover:shadow-lg transition">
+                    <div class="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center mb-4">
+                        <span class="text-2xl">✨</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">AI Writing Assistant</h3>
+                    <p class="text-gray-600">Real-time suggestions as you write. Streaming responses that feel natural.</p>
+                </div>
+
+                <div class="p-6 rounded-2xl border border-gray-200 hover:border-emerald-300 hover:shadow-lg transition">
+                    <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4">
+                        <span class="text-2xl">🎯</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Smart Highlights</h3>
+                    <p class="text-gray-600">Automatically highlight key points in your documents. Never miss important info.</p>
+                </div>
+
+                <div class="p-6 rounded-2xl border border-gray-200 hover:border-emerald-300 hover:shadow-lg transition">
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                        <span class="text-2xl">📝</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Journal Mode</h3>
+                    <p class="text-gray-600">Free-form writing with AI suggestions. Perfect for daily journaling.</p>
+                </div>
+
+                <div class="p-6 rounded-2xl border border-gray-200 hover:border-emerald-300 hover:shadow-lg transition">
+                    <div class="w-12 h-12 bg-pink-100 rounded-lg flex items-center justify-center mb-4">
+                        <span class="text-2xl">🤖</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">6 AI Agents</h3>
+                    <p class="text-gray-600">Email summaries, export to sheets, create calendar events automatically.</p>
+                </div>
+
+                <div class="p-6 rounded-2xl border border-gray-200 hover:border-emerald-300 hover:shadow-lg transition">
+                    <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
+                        <span class="text-2xl">⚡</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Lightning Fast</h3>
+                    <p class="text-gray-600">Streaming responses appear word-by-word. No more waiting for AI.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trust Badges -->
+    <section class="py-12 px-4 bg-white">
+        <div class="max-w-6xl mx-auto">
+            <div class="grid md:grid-cols-4 gap-6 text-center">
+                <div class="p-4">
+                    <div class="text-3xl mb-2">🔒</div>
+                    <div class="font-semibold text-sm">256-bit SSL Encryption</div>
+                </div>
+                <div class="p-4">
+                    <div class="text-3xl mb-2">✓</div>
+                    <div class="font-semibold text-sm">GDPR Compliant</div>
+                </div>
+                <div class="p-4">
+                    <div class="text-3xl mb-2">🛡️</div>
+                    <div class="font-semibold text-sm">SOC 2 Type II</div>
+                </div>
+                <div class="p-4">
+                    <div class="text-3xl mb-2">🔐</div>
+                    <div class="font-semibold text-sm">Data Privacy Guaranteed</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Use Cases -->
+    <section id="use-cases" class="py-24 px-4 bg-gray-50">
+        <div class="max-w-6xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl font-bold mb-4">Built for how you work</h2>
+                <p class="text-xl text-gray-600">Whether you're researching or journaling, we've got you covered</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-12">
+                <div>
+                    <div class="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                        <h3 class="text-2xl font-bold mb-4">📚 For Researchers</h3>
+                        <ul class="space-y-3 text-gray-600">
+                            <li class="flex items-start gap-2">
+                                <span class="text-emerald-500 mt-1">✓</span>
+                                <span>Upload multiple PDFs and chat with your entire library</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-emerald-500 mt-1">✓</span>
+                                <span>Get instant summaries with source citations</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-emerald-500 mt-1">✓</span>
+                                <span>Extract key findings and export to sheets</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-emerald-500 mt-1">✓</span>
+                                <span>Smart highlights on important passages</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                        <h3 class="text-2xl font-bold mb-4">✍️ For Writers</h3>
+                        <ul class="space-y-3 text-gray-600">
+                            <li class="flex items-start gap-2">
+                                <span class="text-cyan-500 mt-1">✓</span>
+                                <span>AI writing suggestions as you type</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-cyan-500 mt-1">✓</span>
+                                <span>Journal mode for daily writing practice</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-cyan-500 mt-1">✓</span>
+                                <span>Add AI responses directly to your document</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-cyan-500 mt-1">✓</span>
+                                <span>Export to PDF, HTML, or plain text</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Case Studies -->
+    <section class="py-20 px-4 bg-white">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="text-3xl font-bold text-center mb-12">How researchers use DocumentGPT</h2>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="p-6 border border-gray-200 rounded-2xl">
+                    <div class="text-3xl mb-4">🎓</div>
+                    <h3 class="text-xl font-bold mb-3">PhD Student</h3>
+                    <p class="text-gray-600 mb-4">"Uploaded 25 research papers, asked 'What are the common themes?', got comprehensive summary in 2 minutes."</p>
+                    <div class="text-sm font-semibold text-emerald-600">Saved 8 hours of manual reading</div>
+                </div>
+                <div class="p-6 border border-gray-200 rounded-2xl">
+                    <div class="text-3xl mb-4">✍️</div>
+                    <h3 class="text-xl font-bold mb-3">Content Writer</h3>
+                    <p class="text-gray-600 mb-4">"Used Journal mode to draft 5 blog posts. AI suggestions helped me write 3x faster while keeping my voice."</p>
+                    <div class="text-sm font-semibold text-cyan-600">3x faster writing speed</div>
+                </div>
+                <div class="p-6 border border-gray-200 rounded-2xl">
+                    <div class="text-3xl mb-4">📚</div>
+                    <h3 class="text-xl font-bold mb-3">Undergraduate</h3>
+                    <p class="text-gray-600 mb-4">"Chatted with my textbook PDFs before exams. Got instant answers to complex questions."</p>
+                    <div class="text-sm font-semibold text-indigo-600">Aced finals with AI help</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section id="pricing" class="py-24 px-4">
+        <div class="max-w-5xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl font-bold mb-4">Simple, transparent pricing</h2>
+                <p class="text-xl text-gray-600">Start free. Upgrade when you need more power.</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                <!-- Free -->
+                <div class="p-8 rounded-2xl border-2 border-gray-200 bg-white">
+                    <div class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Free</div>
+                    <div class="text-5xl font-bold mb-2">$0</div>
+                    <p class="text-gray-600 mb-6">Perfect for trying it out</p>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center gap-2">
+                            <span class="text-emerald-500">✓</span>
+                            <span>10 chats per month</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-emerald-500">✓</span>
+                            <span>2 documents</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-emerald-500">✓</span>
+                            <span>Streaming AI responses</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-emerald-500">✓</span>
+                            <span>Add to Journal feature</span>
+                        </li>
+                    </ul>
+                    <a href="/app.html" class="block w-full py-3 text-center border-2 border-gray-300 rounded-lg font-semibold hover:border-gray-400 transition">
+                        Start free
+                    </a>
+                </div>
+
+                <!-- Premium -->
+                <div class="p-8 rounded-2xl border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 to-cyan-50 relative">
+                    <div class="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-emerald-500 text-white text-xs font-bold rounded-full uppercase">
+                        Most Popular
+                    </div>
+                    <div class="text-sm font-semibold text-emerald-700 uppercase tracking-wide mb-2">Premium</div>
+                    <div class="text-5xl font-bold mb-2">$14.99<span class="text-xl text-gray-600">/mo</span></div>
+                    <p class="text-gray-600 mb-6">For power users</p>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center gap-2">
+                            <span class="text-emerald-500">✓</span>
+                            <span><strong>Unlimited</strong> chats & documents</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-emerald-500">✓</span>
+                            <span>All 6 AI agents</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-emerald-500">✓</span>
+                            <span>Priority support</span>
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <span class="text-emerald-500">✓</span>
+                            <span>Advanced export options</span>
+                        </li>
+                    </ul>
+                    <a href="/app.html" class="block w-full py-3 text-center bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg font-semibold hover:opacity-90 transition">
+                        Upgrade to Premium
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="py-20 px-4 bg-gray-50">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-3xl font-bold text-center mb-12">Frequently asked questions</h2>
             <div class="space-y-4">
-                <input type="email" id="loginEmail" placeholder="Email" class="w-full rounded-lg border px-3 py-2" />
-                <input type="password" id="loginPassword" placeholder="Password" class="w-full rounded-lg border px-3 py-2" />
-                <button id="loginSubmit" class="w-full bg-emerald-500 text-white rounded-lg px-3 py-2 hover:bg-emerald-600">Login</button>
-                <div class="text-center text-sm opacity-70">
-                    Don't have an account? <button id="showSignup" class="text-emerald-500 hover:underline">Sign up</button>
-                </div>
+                <details class="bg-white p-6 rounded-xl border border-gray-200">
+                    <summary class="font-semibold cursor-pointer">How is DocumentGPT different from ChatGPT?</summary>
+                    <p class="mt-3 text-gray-600">DocumentGPT is built specifically for research and writing. Upload PDFs, chat with multiple documents, get smart highlights, and use Journal mode. ChatGPT can't do any of that.</p>
+                </details>
+                <details class="bg-white p-6 rounded-xl border border-gray-200">
+                    <summary class="font-semibold cursor-pointer">Is my data private and secure?</summary>
+                    <p class="mt-3 text-gray-600">Yes. Your documents stay in your workspace. We use 256-bit SSL encryption and are GDPR compliant. We don't train AI models on your data.</p>
+                </details>
+                <details class="bg-white p-6 rounded-xl border border-gray-200">
+                    <summary class="font-semibold cursor-pointer">Can I really use it for free forever?</summary>
+                    <p class="mt-3 text-gray-600">Yes! Free plan includes 10 chats/month and 2 documents. No credit card required. Upgrade to Premium for unlimited usage.</p>
+                </details>
+                <details class="bg-white p-6 rounded-xl border border-gray-200">
+                    <summary class="font-semibold cursor-pointer">How many PDFs can I upload?</summary>
+                    <p class="mt-3 text-gray-600">Free plan: 2 documents. Premium plan: unlimited documents. Each document can be up to 50MB.</p>
+                </details>
+                <details class="bg-white p-6 rounded-xl border border-gray-200">
+                    <summary class="font-semibold cursor-pointer">Do you offer student discounts?</summary>
+                    <p class="mt-3 text-gray-600">Not yet, but we're working on it! Email support@documentgpt.io with your .edu email to join the waitlist.</p>
+                </details>
             </div>
         </div>
-    </div>
+    </section>
 
-    <div id="signupModal" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden items-center justify-center" style="z-index: 100;">
-        <div class="bg-white rounded-2xl shadow-2xl w-[400px] p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-bold">Create Account</h2>
-                <button id="closeSignup" class="text-2xl opacity-50 hover:opacity-100">×</button>
-            </div>
-            <div class="space-y-4">
-                <input type="text" id="signupName" placeholder="Full Name" class="w-full rounded-lg border px-3 py-2" />
-                <input type="email" id="signupEmail" placeholder="Email" class="w-full rounded-lg border px-3 py-2" />
-                <input type="password" id="signupPassword" placeholder="Password (min 8 chars)" class="w-full rounded-lg border px-3 py-2" />
-                <button id="signupSubmit" class="w-full bg-emerald-500 text-white rounded-lg px-3 py-2 hover:bg-emerald-600">Create Account</button>
-                <div class="text-center text-sm opacity-70">
-                    Already have an account? <button id="showLogin" class="text-emerald-500 hover:underline">Login</button>
+    <!-- CTA -->
+    <section class="py-24 px-4 bg-gradient-to-br from-emerald-500 to-cyan-500">
+        <div class="max-w-4xl mx-auto text-center text-white">
+            <h2 class="text-4xl md:text-5xl font-bold mb-6">Ready to write smarter?</h2>
+            <p class="text-xl mb-8 opacity-90">Join thousands of researchers and writers using DocumentGPT</p>
+            <a href="/app.html" class="inline-block px-8 py-4 bg-white text-emerald-600 font-semibold rounded-lg hover:bg-gray-50 transition text-lg">
+                Start writing for free • Join 500+ users this week
+            </a>
+            <p class="mt-4 text-sm opacity-75">No credit card • Start in 30 seconds</p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-16 px-4 border-t border-gray-200 bg-gray-50">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4">Product</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li><a href="/features.html" class="hover:text-gray-900">Features</a></li>
+                        <li><a href="/pricing.html" class="hover:text-gray-900">Pricing</a></li>
+                        <li><a href="/use-cases.html" class="hover:text-gray-900">Use Cases</a></li>
+                        <li><a href="/app.html" class="hover:text-gray-900">Try for Free</a></li>
+                    </ul>
                 </div>
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4">Solutions</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li><a href="/use-cases.html#students" class="hover:text-gray-900">For Students</a></li>
+                        <li><a href="/use-cases.html#researchers" class="hover:text-gray-900">For Researchers</a></li>
+                        <li><a href="/use-cases.html#writers" class="hover:text-gray-900">For Writers</a></li>
+                        <li><a href="/teams.html" class="hover:text-gray-900">For Teams</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4">Resources</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li><a href="/blog/index.html" class="hover:text-gray-900">Blog</a></li>
+                        <li><a href="/blog/how-to-summarize-pdf.html" class="hover:text-gray-900">PDF Guide</a></li>
+                        <li><a href="/blog/ai-writing-assistant-productivity.html" class="hover:text-gray-900">Writing Tips</a></li>
+                        <li><a href="/blog/chat-with-documents.html" class="hover:text-gray-900">Chat Guide</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4">Company</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li><a href="/about.html" class="hover:text-gray-900">About</a></li>
+                        <li><a href="mailto:support@documentgpt.io" class="hover:text-gray-900">Contact</a></li>
+                        <li><a href="mailto:support@documentgpt.io" class="hover:text-gray-900">Support</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4">Legal</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li><a href="#" class="hover:text-gray-900">Privacy</a></li>
+                        <li><a href="#" class="hover:text-gray-900">Terms</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="pt-8 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+                <a href="/" class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500"></div>
+                    <span class="text-xl font-bold">DocumentGPT</span>
+                </a>
+                <div class="text-sm text-gray-500">© 2024 DocumentGPT. All rights reserved.</div>
             </div>
         </div>
-    </div>
+    </footer>
 
-    <div id="folderModal" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden items-center justify-center" style="z-index: 100;">
-        <div class="bg-white rounded-2xl shadow-2xl w-[400px] p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-bold">New Folder</h2>
-                <button id="closeFolderModal" class="text-2xl opacity-50 hover:opacity-100">×</button>
-            </div>
-            <input type="text" id="folderName" placeholder="Folder name" class="w-full rounded-lg border px-3 py-2 mb-4" />
-            <button id="createFolderBtn" class="w-full bg-emerald-500 text-white rounded-lg px-3 py-2 hover:bg-emerald-600">Create</button>
-        </div>
-    </div>
-
-    <input type="file" id="fileInput" class="hidden" accept=".pdf,.txt,.md,.docx" />
-
-    <script>
-const API = 'https://i1dy8i3692.execute-api.us-east-1.amazonaws.com/prod';
-const COGNITO = {UserPoolId: 'us-east-1_UcrfhrZOs', ClientId: '1hpsk9ov5bf7i0vc30bld0757a'};
-const userPool = new AmazonCognitoIdentity.CognitoUserPool(COGNITO);
-
-const CONFIG = {
-    CHAT_LIMIT: 50,
-    DOC_LIMIT: 10
-};
-
-// Settings Store (MUST be defined before use)
-const SETTINGS_KEY = 'dgpt:settings:v1';
-const DEFAULT_SETTINGS = {
-    theme: 'light',
-    autosaveMs: 3000,
-    dnd: false,
-    journalMode: false
-};
-
-function loadSettings() {
-    return {...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')};
-}
-
-function saveSettings(patch) {
-    const settings = {...loadSettings(), ...patch};
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    return settings;
-}
-
-// Apply settings on load
-const initialSettings = loadSettings();
-if (initialSettings.theme === 'dark') {
-    document.body.className = 'h-screen w-full font-sans bg-slate-950 text-slate-100';
-}
-
-// Load state from localStorage or use defaults
-function loadState() {
-    // Clear old state versions
-    const oldKeys = ['dgpt:state:v1', 'dgpt:state', 'documentgpt:state'];
-    oldKeys.forEach(k => localStorage.removeItem(k));
-    
-    const saved = localStorage.getItem('dgpt:state:v3');
-    if (saved) {
-        try {
-            const parsed = JSON.parse(saved);
-            // Always use current CONFIG limits, not saved ones
-            parsed.limits = {chats: CONFIG.CHAT_LIMIT, documents: CONFIG.DOC_LIMIT};
-            return parsed;
-        } catch (e) {
-            console.error('Failed to parse saved state:', e);
-        }
-    }
-    return {
-        user: null,
-        docs: [{id: 'doc1', name: 'Welcome', content: 'Start writing...'}],
-        folders: [],
-        activeId: 'doc1',
-        usage: {chats_used: 0, documents_uploaded: 0},
-        limits: {chats: CONFIG.CHAT_LIMIT, documents: CONFIG.DOC_LIMIT},
-        theme: 'light',
-        zoom: 1,
-        focus: false
-    };
-}
-
-function saveState() {
-    localStorage.setItem('dgpt:state:v3', JSON.stringify(state));
-}
-
-let state = loadState();
-
-// Per-document chat history
-if (!state.chatHistory) state.chatHistory = {};
-
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM loaded, initializing...');
-    await initAuth();
-    render();
-    attachAllEvents();
-    console.log('Initialization complete');
-});
-
-async function initAuth() {
-    try {
-        const cognitoUser = userPool.getCurrentUser();
-        if (cognitoUser) {
-            const session = await new Promise((resolve, reject) => {
-                cognitoUser.getSession((err, session) => err ? reject(err) : resolve(session));
-            });
-            if (session.isValid()) {
-                const payload = session.getIdToken().payload;
-                state.user = {email: payload.email, sub: payload.sub, name: payload.name};
-                await loadUsage();
-                updateAuthUI();
-                return;
-            }
-        }
-    } catch (e) { console.log('No auth session'); }
-    
-    const guestId = localStorage.getItem('guest_id') || 'guest_' + Math.random().toString(36).slice(2, 11);
-    localStorage.setItem('guest_id', guestId);
-    state.user = {email: 'guest@documentgpt.io', sub: guestId, isGuest: true};
-    await loadUsage();
-    updateAuthUI();
-}
-
-function updateAuthUI() {
-    const loginBtn = document.getElementById('loginBtn');
-    const signupBtn = document.getElementById('signupBtn');
-    if (state.user && !state.user.isGuest) {
-        loginBtn.textContent = state.user.name || state.user.email.split('@')[0];
-        loginBtn.onclick = () => { if (confirm('Sign out?')) signOut(); };
-        signupBtn.style.display = 'none';
-    } else {
-        loginBtn.textContent = 'Login';
-        loginBtn.onclick = () => showModal('loginModal');
-        signupBtn.style.display = 'block';
-    }
-}
-
-async function signIn(email, password) {
-    return new Promise((resolve, reject) => {
-        const authDetails = new AmazonCognitoIdentity.AuthenticationDetails({Username: email, Password: password});
-        const cognitoUser = new AmazonCognitoIdentity.CognitoUser({Username: email, Pool: userPool});
-        cognitoUser.authenticateUser(authDetails, {onSuccess: resolve, onFailure: reject});
-    });
-}
-
-async function signUp(email, password, name) {
-    return new Promise((resolve, reject) => {
-        const attrs = [
-            new AmazonCognitoIdentity.CognitoUserAttribute({Name: 'email', Value: email}),
-            new AmazonCognitoIdentity.CognitoUserAttribute({Name: 'name', Value: name})
-        ];
-        userPool.signUp(email, password, attrs, null, (err, result) => err ? reject(err) : resolve(result));
-    });
-}
-
-function signOut() {
-    const cognitoUser = userPool.getCurrentUser();
-    if (cognitoUser) cognitoUser.signOut();
-    localStorage.removeItem('guest_id');
-    location.reload();
-}
-
-async function loadUsage() {
-    try {
-        const res = await fetch(`${API}/usage?user_id=${state.user.sub}`);
-        if (res.ok) {
-            const data = await res.json();
-            state.usage = data.usage || {chats_used: 0, documents_uploaded: 0};
-        }
-    } catch (e) {
-        state.usage = {chats_used: 0, documents_uploaded: 0};
-    }
-    // Always enforce CONFIG limits, never trust backend
-    state.limits = {chats: CONFIG.CHAT_LIMIT, documents: CONFIG.DOC_LIMIT};
-}
-
-function render() {
-    const doc = state.docs.find(d => d.id === state.activeId);
-    const editor = document.getElementById('editor');
-    editor.innerHTML = doc.content;
-    
-    // Make PDFs read-only
-    if (doc.isPdf) {
-        editor.contentEditable = 'false';
-        document.getElementById('formatToolbar').style.display = 'none';
-    } else {
-        editor.contentEditable = 'true';
-        document.getElementById('formatToolbar').style.display = 'flex';
-    }
-    
-    // Restore chat history for this document
-    const chatContainer = document.getElementById('chatMessages');
-    chatContainer.innerHTML = '';
-    const history = state.chatHistory[state.activeId] || [];
-    if (history.length === 0) {
-        chatContainer.innerHTML = '<div class="text-sm p-3 rounded-2xl border bg-emerald-50 text-gray-900">I\'m here to help you write better or analyze documents. Start typing or upload a file!</div>';
-    } else {
-        history.forEach(msg => {
-            const div = document.createElement('div');
-            div.className = msg.sender === 'user' 
-                ? 'text-sm p-3 rounded-2xl border bg-blue-50 ml-8 text-gray-900'
-                : 'text-sm p-3 rounded-2xl border bg-emerald-50 mr-8 text-gray-900';
-            div.textContent = msg.text;
-            chatContainer.appendChild(div);
-        });
-    }
-    document.getElementById('planName').textContent = state.user?.isGuest ? 'Free' : 'Pro';
-    document.getElementById('planPrice').textContent = state.user?.isGuest ? '$0/mo' : '$12.99/mo';
-    
-    // Update doc count to match actual docs
-    const actualDocCount = state.docs.length;
-    document.getElementById('chatUsage').textContent = `${state.usage.chats_used}/${state.limits.chats}`;
-    document.getElementById('docUsage').textContent = `${actualDocCount}/${state.limits.documents}`;
-    document.getElementById('chatBar').style.width = `${Math.min(100, (state.usage.chats_used / state.limits.chats) * 100)}%`;
-    document.getElementById('docBar').style.width = `${Math.min(100, (actualDocCount / state.limits.documents) * 100)}%`;
-    
-    const tabs = document.getElementById('tabsContainer');
-    tabs.innerHTML = state.docs.map(d => 
-        `<div class="flex items-center gap-2 px-3 py-1 rounded-lg text-xs border ${d.id === state.activeId ? 'tab-active' : ''} cursor-pointer">
-            <span onclick="setActive('${d.id}')">${d.name}</span>
-            <button onclick="event.stopPropagation(); deleteDoc('${d.id}')" class="ml-2 px-1 text-base opacity-70 hover:opacity-100 hover:bg-red-100 rounded">×</button>
-        </div>`
-    ).join('');
-    
-    const docsList = document.getElementById('docsList');
-    if (state.docs.length === 0) {
-        docsList.innerHTML = '<div class="text-xs opacity-60 text-center py-2">No documents yet</div>';
-    } else {
-        docsList.innerHTML = state.docs.map(d => 
-            `<div class="px-3 py-2 rounded-lg text-sm hover:shadow-sm border cursor-pointer ${d.id === state.activeId ? 'bg-emerald-50' : ''}" onclick="setActive('${d.id}')">${d.name}</div>`
-        ).join('');
-    }
-    
-    const folders = document.getElementById('foldersContainer');
-    if (state.folders.length === 0) {
-        folders.innerHTML = '<div class="text-xs opacity-60 text-center py-2">No folders yet</div>';
-    } else {
-        folders.innerHTML = state.folders.map(f => 
-            `<div class="px-3 py-2 rounded-lg text-sm hover:shadow-sm border">📁 ${f.name}</div>`
-        ).join('');
-    }
-    
-    updateStats();
-}
-
-function updateStats() {
-    const text = document.getElementById('editor').textContent;
-    const words = text.trim().split(/\s+/).filter(w => w).length;
-    const sentences = Math.max(1, (text.match(/[.!?]/g) || []).length);
-    const syllables = (text.toLowerCase().match(/[aeiouy]{1,2}/g) || []).length;
-    const readability = Math.max(0, Math.min(100, Math.round(206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / Math.max(1, words)))));
-    
-    document.getElementById('wordCount').textContent = words;
-    document.getElementById('readTime').textContent = Math.max(1, Math.ceil(words / 200)) + 'm';
-    document.getElementById('readability').textContent = readability;
-    
-    const exclamations = (text.match(/!/g) || []).length;
-    const questions = (text.match(/\?/g) || []).length;
-    const tone = exclamations > 3 ? 'Excited' : questions > 3 ? 'Curious' : 'Neutral';
-    document.getElementById('tone').textContent = tone;
-}
-
-function attachAllEvents() {
-    console.log('Attaching all event handlers...');
-    
-    // Helper to safely attach events
-    const on = (id, event, handler) => {
-        const el = document.getElementById(id);
-        if (el) el[event] = handler;
-    };
-    
-    // Document management
-    on('uploadBtn', 'onclick', () => document.getElementById('fileInput').click());
-    on('newBtn', 'onclick', createNewDoc);
-    on('addTabBtn', 'onclick', createNewDoc);
-    
-    // File upload
-    on('fileInput', 'onchange', handleFileUpload);
-    
-    // Chat
-    on('sendBtn', 'onclick', sendChat);
-    on('chatInput', 'onkeydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendChat();
-        }
-        // Shift+Enter creates newline (default behavior, don't prevent)
-    });
-    
-    // Agents
-    on('summaryAgent', 'onclick', () => runAgent('summary'));
-    on('emailAgent', 'onclick', () => runAgent('email'));
-    on('sheetsAgent', 'onclick', () => runAgent('sheets'));
-    on('calendarAgent', 'onclick', () => runAgent('calendar'));
-    on('saveAgent', 'onclick', () => runAgent('save'));
-    on('exportAgent', 'onclick', () => runAgent('export'));
-    
-    // Modals
-    on('upgradeBtn', 'onclick', () => showModal('upgradeModal'));
-    on('closeUpgrade', 'onclick', () => hideModal('upgradeModal'));
-    on('signupBtn', 'onclick', () => showModal('signupModal'));
-    on('closeLogin', 'onclick', () => hideModal('loginModal'));
-    on('closeSignup', 'onclick', () => hideModal('signupModal'));
-    on('showSignup', 'onclick', () => { hideModal('loginModal'); showModal('signupModal'); });
-    on('showLogin', 'onclick', () => { hideModal('signupModal'); showModal('loginModal'); });
-    
-    // Auth
-    on('loginSubmit', 'onclick', handleLogin);
-    on('signupSubmit', 'onclick', handleSignup);
-    
-    // Folders
-    on('newFolderBtn', 'onclick', () => showModal('folderModal'));
-    on('closeFolderModal', 'onclick', () => hideModal('folderModal'));
-    on('createFolderBtn', 'onclick', createFolder);
-    
-    // Command palette
-    const paletteBtn = document.getElementById('paletteBtn');
-    if (paletteBtn) paletteBtn.onclick = () => showModal('palette');
-    const paletteItems = document.getElementById('paletteItems');
-    if (paletteItems) {
-        paletteItems.querySelectorAll('button').forEach(btn => {
-            btn.onclick = () => {
-                const cmd = btn.dataset.cmd;
-                hideModal('palette');
-                executeCommand(cmd);
-            };
-        });
-    }
-    
-    // Theme & Focus
-    on('themeBtn', 'onclick', toggleTheme);
-    on('focusBtn', 'onclick', toggleFocus);
-    
-    // Find
-    on('findBtn', 'onclick', handleFind);
-    const findInput = document.getElementById('findInput');
-    if (findInput) {
-        findInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                e.stopPropagation();
-                handleFind();
-                return false;
-            }
-        });
-        findInput.addEventListener('input', (e) => {
-            e.stopPropagation();
-        });
-    }
-    
-    // Zoom
-    on('zoomIn', 'onclick', () => adjustZoom(0.1));
-    on('zoomOut', 'onclick', () => adjustZoom(-0.1));
-    
-    // Formatting toolbar
-    on('boldBtn', 'onclick', () => formatDoc('bold'));
-    on('italicBtn', 'onclick', () => formatDoc('italic'));
-    on('underlineBtn', 'onclick', () => formatDoc('underline'));
-    on('bulletBtn', 'onclick', () => formatDoc('insertUnorderedList'));
-    on('numberBtn', 'onclick', () => formatDoc('insertOrderedList'));
-    on('indentBtn', 'onclick', () => formatDoc('indent'));
-    on('outdentBtn', 'onclick', () => formatDoc('outdent'));
-    on('alignLeftBtn', 'onclick', () => formatDoc('justifyLeft'));
-    on('alignCenterBtn', 'onclick', () => formatDoc('justifyCenter'));
-    on('alignRightBtn', 'onclick', () => formatDoc('justifyRight'));
-    on('fontSizeSelect', 'onchange', (e) => {
-        if (e.target.value) {
-            formatDoc('fontSize', e.target.value);
-            e.target.value = '';
-        }
-    });
-    
-    // Editor
-    on('editor', 'oninput', handleEditorInput);
-    
-    // Keyboard shortcuts
-    document.addEventListener('keydown', handleKeyboardShortcuts);
-    
-    // Plan selection
-    document.querySelectorAll('.selectPlan').forEach(btn => {
-        btn.onclick = () => selectPlan(btn.dataset.plan);
-    });
-    
-    console.log('All event handlers attached');
-}
-
-function createNewDoc() {
-    // Enforce doc limit (5 for free)
-    if (state.docs.length >= state.limits.documents) {
-        showModal('upgradeModal');
-        toast(`Document limit reached! (${state.limits.documents} max)`);
-        return;
-    }
-    const doc = {id: 'doc' + Date.now(), name: 'Untitled ' + (state.docs.length + 1), content: ''};
-    state.docs.push(doc);
-    state.activeId = doc.id;
-    saveState();
-    render();
-    toast('New document created');
-}
-
-async function handleFileUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    e.target.value = '';
-    
-    if (state.usage.documents_uploaded >= state.limits.documents) {
-        showModal('upgradeModal');
-        toast('Document limit reached!');
-        return;
-    }
-    
-    toast(`Uploading ${file.name}...`);
-    
-    try {
-        let content = '';
-        
-        if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
-            const pages = [];
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                const pageText = textContent.items.map(item => item.str).join(' ');
-                pages.push(pageText);
-            }
-            content = pages.join('\n\n');
-        } else {
-            content = await file.text();
-        }
-        
-        const processRes = await fetch(`${API}/upload`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                user_id: state.user.sub,
-                filename: file.name,
-                content: content
-            })
-        });
-        
-        if (!processRes.ok) {
-            const err = await processRes.json();
-            throw new Error(err.error || 'Processing failed');
-        }
-        
-        const result = await processRes.json();
-        
-        // Split into pages (roughly 3000 chars per page)
-        const pages = [];
-        const charsPerPage = 3000;
-        for (let i = 0; i < content.length; i += charsPerPage) {
-            pages.push(content.substring(i, i + charsPerPage));
-        }
-        const pagesHtml = pages.map((page, idx) => 
-            `<div style="max-width: 8.5in; min-height: 11in; margin: 20px auto; padding: 1in; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.8; color: #000; white-space: pre-wrap; page-break-after: always; position: relative;">
-                ${page.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
-                <div style="position: absolute; bottom: 0.5in; right: 1in; font-size: 10pt; color: #666;">Page ${idx + 1} of ${pages.length}</div>
-            </div>`
-        ).join('');
-        
-        // Create new document with uploaded content
-        const newDoc = {
-            id: 'doc' + Date.now(),
-            name: file.name.replace(/\.[^/.]+$/, ''),
-            content: pagesHtml,
-            isPdf: file.type === 'application/pdf' || file.name.endsWith('.pdf')
-        };
-        state.docs.push(newDoc);
-        state.activeId = newDoc.id;
-        
-        addChatMessage(`✅ Uploaded ${file.name}`, 'bot');
-        if (result.questions && result.questions.length > 0) {
-            addChatMessage(`Try asking: ${result.questions[0]}`, 'bot');
-        }
-        await loadUsage();
-        render();
-        toast('Upload successful!');
-        document.getElementById('editor').focus();
-    } catch (e) {
-        console.error('Upload error:', e);
-        addChatMessage(`❌ Upload failed: ${e.message}`, 'bot');
-        toast(`Upload failed: ${e.message}`);
-    }
-}
-
-async function sendChat() {
-    const input = document.getElementById('chatInput');
-    const msg = input.value.trim();
-    if (!msg) return;
-    
-    // Check against CONFIG limits, not state.limits
-    if (state.usage.chats_used >= CONFIG.CHAT_LIMIT) {
-        showModal('upgradeModal');
-        toast(`Chat limit reached! (${CONFIG.CHAT_LIMIT} max)`);
-        return;
-    }
-    
-    input.value = '';
-    addChatMessage(msg, 'user');
-    
-    // Include current document content for context
-    const docContent = document.getElementById('editor').textContent || '';
-    const contextMsg = docContent ? `Document content: ${docContent}\n\nUser question: ${msg}` : msg;
-    
-    try {
-        const res = await fetch(`${API}/chat`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({user_id: state.user.sub, messages: [{role: 'user', content: contextMsg}]})
-        });
-        
-        const data = await res.json();
-        if (res.ok) {
-            addChatMessage(data.response, 'bot');
-            await loadUsage();
-            render();
-        } else {
-            if (res.status === 403) showModal('upgradeModal');
-            addChatMessage(`Error: ${data.error}`, 'bot');
-        }
-    } catch (e) {
-        addChatMessage(`Error: ${e.message}`, 'bot');
-    }
-}
-
-async function runAgent(type) {
-    // Free export for TXT
-    if (type === 'export') {
-        const doc = state.docs.find(d => d.id === state.activeId);
-        const content = document.getElementById('editor').textContent;
-        const blob = new Blob([content], {type: 'text/plain'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${doc.name}.txt`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast('Document exported as TXT');
-        return;
-    }
-    
-    const content = document.getElementById('editor').textContent;
-    
-    try {
-        const res = await fetch(`${API}/agent`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({user_id: state.user.sub, agent_type: type, content, params: {}})
-        });
-        
-        const data = await res.json();
-        if (res.ok) {
-            addChatMessage(`✅ ${type}: ${data.summary || data.message || data.result || 'Done'}`, 'bot');
-        } else {
-            if (res.status === 403) showModal('upgradeModal');
-            addChatMessage(`❌ ${data.error}`, 'bot');
-        }
-    } catch (e) {
-        addChatMessage(`❌ ${e.message}`, 'bot');
-    }
-}
-
-async function handleLogin() {
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-    if (!email || !password) return toast('Fill all fields');
-    try {
-        await signIn(email, password);
-        hideModal('loginModal');
-        toast('Login successful!');
-        location.reload();
-    } catch (e) {
-        toast('Login failed: ' + e.message);
-    }
-}
-
-async function handleSignup() {
-    const name = document.getElementById('signupName').value;
-    const email = document.getElementById('signupEmail').value;
-    const password = document.getElementById('signupPassword').value;
-    if (!name || !email || !password) return toast('Fill all fields');
-    if (password.length < 8) return toast('Password must be 8+ chars');
-    try {
-        await signUp(email, password, name);
-        hideModal('signupModal');
-        toast('Account created! Check email to verify.');
-    } catch (e) {
-        toast('Signup failed: ' + e.message);
-    }
-}
-
-function createFolder() {
-    const name = document.getElementById('folderName').value.trim();
-    if (name) {
-        state.folders.push({id: 'folder' + Date.now(), name});
-        document.getElementById('folderName').value = '';
-        hideModal('folderModal');
-        render();
-        toast('Folder created');
-    }
-}
-
-function executeCommand(cmd) {
-    if (cmd === 'new') createNewDoc();
-    else if (cmd === 'upload') document.getElementById('uploadBtn').click();
-    else if (cmd === 'theme') toggleTheme();
-    else if (cmd === 'focus') toggleFocus();
-    else runAgent(cmd);
-}
-
-function toggleTheme() {
-    state.theme = state.theme === 'light' ? 'dark' : 'light';
-    document.body.className = state.theme === 'dark' 
-        ? 'h-screen w-full font-sans bg-slate-950 text-slate-100' 
-        : 'h-screen w-full font-sans';
-    document.getElementById('themeBtn').textContent = state.theme === 'light' ? '🌞' : '🌙';
-    toast(`Theme: ${state.theme}`);
-}
-
-function toggleFocus() {
-    state.focus = !state.focus;
-    const left = document.getElementById('leftSidebar');
-    const right = document.getElementById('rightSidebar');
-    if (state.focus) {
-        left.classList.add('hidden');
-        right.classList.add('hidden');
-        document.getElementById('focusBtn').textContent = 'Exit';
-    } else {
-        left.classList.remove('hidden');
-        right.classList.remove('hidden');
-        document.getElementById('focusBtn').textContent = 'Focus';
-    }
-    toast(state.focus ? 'Focus mode ON' : 'Focus mode OFF');
-}
-
-function handleFind() {
-    const query = document.getElementById('findInput').value.trim();
-    if (!query) return;
-    
-    // Clear previous highlights
-    const editor = document.getElementById('editor');
-    const content = editor.innerHTML;
-    const cleanContent = content.replace(/<mark class="highlight">(.*?)<\/mark>/gi, '$1');
-    editor.innerHTML = cleanContent;
-    
-    // Highlight all matches
-    const regex = new RegExp(`(${query})`, 'gi');
-    const highlighted = cleanContent.replace(regex, '<mark class="highlight" style="background: yellow; padding: 2px;">$1</mark>');
-    editor.innerHTML = highlighted;
-    
-    const matches = (highlighted.match(/<mark/g) || []).length;
-    if (matches > 0) {
-        toast(`Found ${matches} match${matches > 1 ? 'es' : ''}`);
-        // Scroll to first match
-        const firstMark = editor.querySelector('mark.highlight');
-        if (firstMark) firstMark.scrollIntoView({behavior: 'smooth', block: 'center'});
-    } else {
-        toast(`Not found: "${query}"`);
-    }
-}
-
-function adjustZoom(delta) {
-    state.zoom = Math.max(0.8, Math.min(1.5, state.zoom + delta));
-    document.getElementById('editorContainer').style.transform = `scale(${state.zoom})`;
-    document.getElementById('zoomLabel').textContent = Math.round(state.zoom * 100) + '%';
-}
-
-function formatDoc(cmd, value) {
-    document.execCommand(cmd, false, value || null);
-    document.getElementById('editor').focus();
-}
-
-function handleEditorInput() {
-    const doc = state.docs.find(d => d.id === state.activeId);
-    if (doc) doc.content = document.getElementById('editor').innerHTML;
-    updateStats();
-    document.getElementById('saveStatus').textContent = 'Saving...';
-    setTimeout(() => {
-        document.getElementById('saveStatus').textContent = 'Saved';
-        saveState();
-    }, 500);
-}
-
-function handleKeyboardShortcuts(e) {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        showModal('palette');
-    }
-    if (e.key === 'Escape') {
-        hideModal('palette');
-        hideModal('upgradeModal');
-        hideModal('folderModal');
-        hideModal('loginModal');
-        hideModal('signupModal');
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'b') { e.preventDefault(); formatDoc('bold'); }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'i') { e.preventDefault(); formatDoc('italic'); }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'u') { e.preventDefault(); formatDoc('underline'); }
-}
-
-function addChatMessage(text, sender) {
-    const div = document.createElement('div');
-    div.className = sender === 'user' 
-        ? 'text-sm p-3 rounded-2xl border bg-blue-50 ml-8 text-gray-900'
-        : 'text-sm p-3 rounded-2xl border bg-emerald-50 mr-8 text-gray-900';
-    div.textContent = text;
-    document.getElementById('chatMessages').appendChild(div);
-    div.scrollIntoView({behavior: 'smooth'});
-    
-    // Save to per-document chat history
-    if (!state.chatHistory[state.activeId]) state.chatHistory[state.activeId] = [];
-    state.chatHistory[state.activeId].push({text, sender});
-    saveState();
-}
-
-function showModal(id) {
-    document.getElementById(id).classList.remove('hidden');
-    document.getElementById(id).classList.add('flex');
-}
-
-function hideModal(id) {
-    document.getElementById(id).classList.add('hidden');
-    document.getElementById(id).classList.remove('flex');
-}
-
-function toast(msg) {
-    const div = document.createElement('div');
-    div.className = 'fixed bottom-4 right-4 bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg shadow-lg z-50';
-    div.textContent = msg;
-    document.body.appendChild(div);
-    setTimeout(() => div.remove(), 3000);
-}
-
-window.setActive = (id) => {
-    state.activeId = id;
-    render();
-    saveState();
-};
-
-window.deleteDoc = (id) => {
-    if (state.docs.length <= 1) {
-        toast('⚠️ Cannot delete last document');
-        return;
-    }
-    if (!confirm('Delete this document?')) return;
-    state.docs = state.docs.filter(d => d.id !== id);
-    if (state.activeId === id) state.activeId = state.docs[0].id;
-    saveState();
-    render();
-    toast('Document deleted');
-}
-
-function selectPlan(plan) {
-    if (!state.user || state.user.isGuest) {
-        hideModal('upgradeModal');
-        showModal('loginModal');
-        toast('Please login first');
-        return;
-    }
-    toast(`Redirecting to checkout for ${plan}...`);
-}
-
-// === PRODUCTION FEATURES (Approach 2) ===
-
-// Settings Modal
-function openSettings() {
-    const s = loadSettings();
-    const modal = document.createElement('div');
-    modal.id = 'settingsModal';
-    modal.className = 'fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center';
-    modal.style.zIndex = '100';
-    modal.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-2xl w-[600px] p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold">⚙️ Settings</h2>
-                <button onclick="document.getElementById('settingsModal').remove()" class="text-2xl opacity-50 hover:opacity-100">×</button>
-            </div>
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Theme</span>
-                    <select id="settingTheme" class="border rounded px-3 py-1 text-sm">
-                        <option value="light" ${s.theme === 'light' ? 'selected' : ''}>Light</option>
-                        <option value="dark" ${s.theme === 'dark' ? 'selected' : ''}>Dark</option>
-                    </select>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Autosave interval (ms)</span>
-                    <input id="settingAutosave" type="number" value="${s.autosaveMs}" min="1000" step="500" class="border rounded px-3 py-1 text-sm w-24" />
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Do Not Disturb</span>
-                    <input id="settingDnd" type="checkbox" ${s.dnd ? 'checked' : ''} class="w-4 h-4" />
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm">Journal Mode</span>
-                    <input id="settingJournal" type="checkbox" ${s.journalMode ? 'checked' : ''} class="w-4 h-4" />
-                </div>
-                <button onclick="saveSettingsFromModal()" class="w-full bg-emerald-500 text-white rounded-lg px-4 py-2 hover:bg-emerald-600">Save Settings</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-}
-
-window.saveSettingsFromModal = () => {
-    const settings = saveSettings({
-        theme: document.getElementById('settingTheme').value,
-        autosaveMs: parseInt(document.getElementById('settingAutosave').value),
-        dnd: document.getElementById('settingDnd').checked,
-        journalMode: document.getElementById('settingJournal').checked
-    });
-    toast('Settings saved');
-    document.getElementById('settingsModal').remove();
-    // Apply theme immediately
-    if (settings.theme !== state.theme) {
-        state.theme = settings.theme;
-        toggleTheme();
-    }
-};
-
-// Health Dashboard (placeholder - will be real later)
-function openHealthDashboard() {
-    const modal = document.createElement('div');
-    modal.id = 'healthModal';
-    modal.className = 'fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center';
-    modal.style.zIndex = '100';
-    modal.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-2xl w-[600px] p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold">📊 Document Health</h2>
-                <button onclick="document.getElementById('healthModal').remove()" class="text-2xl opacity-50 hover:opacity-100">&times;</button>
-            </div>
-            <div class="text-center py-8 text-gray-500">
-                <p class="mb-4">Health dashboard coming soon!</p>
-                <p class="text-sm">Will show: readability, tone, voice metrics, and quick fixes.</p>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-}
-
-// Wire all buttons
-const settingsBtn = document.getElementById('settingsBtn');
-if (settingsBtn) settingsBtn.onclick = openSettings;
-const settingsBtn2 = document.getElementById('settingsBtn2');
-if (settingsBtn2) settingsBtn2.onclick = openSettings;
-const healthBtn = document.getElementById('healthBtn');
-if (healthBtn) healthBtn.onclick = openHealthDashboard;
-
-console.log('✅ Settings & Health buttons wired');
-
-    </script>
 </body>
 </html>

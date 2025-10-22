@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat with Your Documents: The Future of Research - DocumentGPT</title>
+<meta name="description" content="Why conversational AI is replacing traditional document search and how it transforms research workflows for students and professionals.">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+body{font-family:'Inter',sans-serif;background:#fff}
+.content{line-height:1.8}
+.content h2{font-size:1.75rem;font-weight:700;margin-top:3rem;margin-bottom:1rem;color:#047857;scroll-margin-top:100px}
+.content h3{font-size:1.25rem;font-weight:600;margin-top:2rem;margin-bottom:0.75rem;color:#059669}
+.content p{margin-bottom:1.25rem;color:#374151;font-size:1.05rem}
+.content ul{list-style:disc;margin-left:2rem;margin-bottom:1.5rem}
+.content ol{list-style:decimal;margin-left:2rem;margin-bottom:1.5rem}
+.content li{margin-bottom:0.75rem;color:#4b5563}
+.toc{position:sticky;top:100px}
+.toc a{transition:all 0.2s}
+.toc a:hover{color:#047857}
+</style>
+</head>
+<body>
+<header class="fixed top-0 w-full bg-white/90 backdrop-blur-sm border-b border-gray-200 z-50">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex justify-between items-center h-16">
+<a href="/" class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500"></div>
+<span class="text-xl font-bold">DocumentGPT</span>
+</a>
+<nav class="hidden md:flex items-center gap-8">
+<a href="/pricing.html" class="text-sm text-gray-600 hover:text-gray-900">Pricing</a>
+<a href="/teams.html" class="text-sm text-gray-600 hover:text-gray-900">Teams</a>
+<a href="/about.html" class="text-sm text-gray-600 hover:text-gray-900">About</a>
+<a href="/blog/index.html" class="text-sm text-gray-600 hover:text-gray-900">Blog</a>
+</nav>
+<a href="/app.html" class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-semibold rounded-lg">Start free</a>
+</div>
+</div>
+</header>
+<div class="max-w-7xl mx-auto px-4 pt-24 pb-12">
+<a href="/blog/index.html" class="text-emerald-600 hover:text-emerald-700 mb-8 inline-block">← Back to Blog</a>
+<div class="grid lg:grid-cols-4 gap-12">
+<aside class="lg:col-span-1 hidden lg:block">
+<div class="toc bg-gray-50 rounded-xl p-6 border border-gray-200">
+<h3 class="font-bold text-sm uppercase tracking-wide text-gray-900 mb-4">Table of Contents</h3>
+<nav class="space-y-2 text-sm">
+<a href="#introduction" class="block text-gray-600 hover:text-emerald-600">The Search Problem</a>
+<a href="#what-is-chat" class="block text-gray-600 hover:text-emerald-600">What is Document Chat</a>
+<a href="#how-it-works" class="block text-gray-600 hover:text-emerald-600">How It Works</a>
+<a href="#benefits" class="block text-gray-600 hover:text-emerald-600">Key Benefits</a>
+<a href="#use-cases" class="block text-gray-600 hover:text-emerald-600">Use Cases</a>
+<a href="#vs-search" class="block text-gray-600 hover:text-emerald-600">Chat vs Traditional Search</a>
+<a href="#best-practices" class="block text-gray-600 hover:text-emerald-600">Best Practices</a>
+<a href="#future" class="block text-gray-600 hover:text-emerald-600">The Future</a>
+<a href="#conclusion" class="block text-gray-600 hover:text-emerald-600">Conclusion</a>
+</nav>
+</div>
+</aside>
+<article class="lg:col-span-3">
+<div class="bg-white rounded-2xl border border-gray-200 p-8 lg:p-12 shadow-sm">
+<div class="mb-8">
+<div class="text-6xl mb-4">💬</div>
+<h1 class="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">Chat with Your Documents: The Future of Research</h1>
+<div class="flex gap-4 text-sm text-gray-500 mb-6">
+<span>📅 Dec 2024</span>
+<span>⏱️ 14 min read</span>
+<span>✍️ Research</span>
+</div>
+<p class="text-xl text-gray-600 leading-relaxed">Why conversational AI is replacing traditional document search and how it transforms research workflows for students and professionals.</p>
+</div>
+<div class="content">
+<h2 id="introduction">The Search Problem</h2>
+<p>Traditional document search is broken. You know the information is somewhere in that 80-page report, but finding it requires reading through dozens of pages, using Ctrl+F to search for keywords that might not match exactly, and hoping you don't miss critical context.</p>
+
+<p>The problem gets worse with multiple documents. Need to find information across 10 research papers? You're looking at hours of manual searching, cross-referencing, and note-taking. By the time you find what you need, you've forgotten why you were looking for it in the first place.</p>
+
+<p>This is why conversational AI for documents is revolutionary. Instead of searching for keywords, you ask questions in natural language and get answers with citations. Instead of reading linearly, you navigate documents through conversation. It's the difference between using a card catalog and asking a librarian who's read every book.</p>
+
+<p><a href="/app.html" class="text-emerald-600 hover:underline">DocumentGPT</a> pioneered this approach, allowing users to chat with PDFs, Word documents, and research papers as if they were talking to an expert who's memorized every word.</p>
+<h2 id="what-is-chat">What is Document Chat?</h2>
+<p>Document chat is a conversational interface for interacting with written content. Instead of reading documents sequentially or searching for keywords, you ask questions and receive answers based on the document's content.</p>
+
+<h3>How It's Different from Search</h3>
+<p>Traditional search finds keywords. Document chat understands meaning. When you search for "revenue growth," you only find pages containing those exact words. When you ask "How much did revenue grow last quarter?", document chat understands you're looking for financial performance data and finds the answer even if the document uses different terminology like "sales increased" or "income rose."</p>
+
+<h3>The Technology Behind It</h3>
+<p>Document chat uses advanced natural language processing (NLP) and large language models (LLMs) to:</p>
+<ul>
+<li>Extract and understand document content</li>
+<li>Interpret your questions in context</li>
+<li>Find relevant information across multiple sections</li>
+<li>Synthesize answers from different parts of the document</li>
+<li>Provide citations so you can verify the source</li>
+</ul>
+
+<h3>Multi-Document Intelligence</h3>
+<p>The real power emerges when chatting with multiple documents simultaneously. Upload 20 research papers and ask "What do these studies say about climate change impacts?" The AI analyzes all 20 papers, identifies common themes, notes contradictions, and provides a comprehensive answer with citations from each relevant paper.</p>
+<h2 id="how-it-works">How Document Chat Works</h2>
+<p>Understanding the process helps you use document chat more effectively. Here's what happens behind the scenes:</p>
+
+<h3>Step 1: Document Processing</h3>
+<p>When you upload a document, the AI extracts all text while preserving structure—headings, paragraphs, tables, and lists. For PDFs, this includes OCR for scanned documents. Processing typically takes 10-30 seconds depending on document length.</p>
+
+<h3>Step 2: Content Indexing</h3>
+<p>The AI breaks the document into semantic chunks—meaningful sections that can be understood independently. It creates embeddings (mathematical representations) of each chunk, allowing for semantic search rather than just keyword matching.</p>
+
+<h3>Step 3: Question Understanding</h3>
+<p>When you ask a question, the AI analyzes your intent. Are you looking for a specific fact? A summary? A comparison? Understanding intent helps the AI provide better answers.</p>
+
+<h3>Step 4: Relevant Content Retrieval</h3>
+<p>The AI searches through all indexed chunks to find the most relevant sections. It uses semantic similarity—meaning-based matching—rather than simple keyword search. This is why you can ask "What's the budget?" and get answers even if the document says "financial allocation" instead.</p>
+
+<h3>Step 5: Answer Generation</h3>
+<p>The AI synthesizes information from relevant sections into a coherent answer. It maintains context, provides citations, and can combine information from multiple parts of the document or multiple documents.</p>
+
+<h3>Step 6: Citation and Verification</h3>
+<p>Every answer includes citations showing exactly where the information came from. This allows you to verify accuracy and dive deeper into specific sections if needed.</p>
+<div class="my-8 p-6 bg-gradient-to-r from-emerald-50 to-cyan-50 rounded-xl border border-emerald-200">
+<h3 class="text-xl font-bold mb-3">Start using AI to automate writing tasks. Free to start.</h3>
+<p class="text-gray-700 mb-4">Upload your first document and experience AI-powered productivity.</p>
+<a href="/app.html" class="inline-block px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-xl hover:opacity-90 transition">Try DocumentGPT Free →</a>
+</div>
+<h2 id="benefits">Key Benefits of Document Chat</h2>
+<p>Document chat delivers measurable benefits across research, productivity, and collaboration:</p>
+
+<h3>1. Massive Time Savings</h3>
+<p>Reading a 50-page document takes 1.5-2 hours. Finding specific information through document chat takes 30 seconds. Users report 80-90% time savings on research tasks. Learn more about <a href="/blog/how-to-summarize-pdf.html" class="text-emerald-600 hover:underline">AI-powered PDF summarization</a>.</p>
+
+<h3>2. Better Information Retention</h3>
+<p>When you read passively, you retain about 10% of information. When you actively ask questions and engage with content, retention jumps to 50-70%. Document chat turns passive reading into active learning.</p>
+
+<h3>3. Deeper Understanding</h3>
+<p>You can ask follow-up questions, request clarifications, and explore tangential topics. This iterative process leads to deeper understanding than linear reading ever could.</p>
+
+<h3>4. Multi-Document Analysis</h3>
+<p>Compare findings across dozens of documents instantly. Identify patterns, contradictions, and gaps in research that would take days to find manually.</p>
+
+<h3>5. Accessibility</h3>
+<p>Document chat makes complex documents accessible to everyone. Non-experts can ask basic questions and get clear explanations. Experts can dive deep with technical queries.</p>
+
+<h3>6. Language Translation</h3>
+<p>Ask questions in your language and get answers from documents in other languages. The AI handles translation automatically, breaking down language barriers in research.</p>
+
+<h3>7. Always Available</h3>
+<p>Unlike human experts, document chat is available 24/7. No waiting for office hours or scheduling meetings. Get answers instantly whenever you need them.</p>
+<h2 id="use-cases">Real-World Use Cases</h2>
+<p>Document chat transforms workflows across industries and roles:</p>
+
+<h3>Academic Research</h3>
+<p><strong>Literature Reviews:</strong> Upload 30 papers and ask "What methodologies were used?" or "What are the main contradictions in findings?" Complete literature reviews in hours instead of weeks.</p>
+
+<p><strong>Thesis Writing:</strong> Chat with all your source materials simultaneously. Ask "Which studies support my hypothesis?" and get instant answers with citations ready for your bibliography. See our guide on <a href="/blog/ai-thesis-literature-review.html" class="text-emerald-600 hover:underline">AI for thesis research</a>.</p>
+
+<p><strong>Exam Preparation:</strong> Upload textbook chapters and lecture notes. Ask practice questions and get detailed answers. Create custom study guides by asking "Summarize the key concepts in Chapter 5."</p>
+
+<h3>Legal and Compliance</h3>
+<p><strong>Contract Analysis:</strong> Upload contracts and ask "What are the termination clauses?" or "What penalties are specified for late delivery?" Find critical information in seconds instead of hours.</p>
+
+<p><strong>Regulatory Compliance:</strong> Chat with regulatory documents to understand requirements. Ask "What are the reporting deadlines?" or "What documentation is required for compliance?"</p>
+
+<p><strong>Case Research:</strong> Analyze legal precedents by chatting with case documents. Find relevant rulings and arguments without reading hundreds of pages.</p>
+
+<h3>Business and Consulting</h3>
+<p><strong>Market Research:</strong> Upload industry reports and ask "What are the growth trends?" or "Who are the major competitors?" Synthesize insights from multiple sources instantly.</p>
+
+<p><strong>Proposal Writing:</strong> Chat with RFPs and client documents to ensure your proposals address all requirements. One consultant <a href="/blog/ai-proposal-case-study.html" class="text-emerald-600 hover:underline">wrote a winning proposal in 1 hour</a> using this approach.</p>
+
+<p><strong>Due Diligence:</strong> Analyze financial statements, business plans, and legal documents quickly. Ask targeted questions to identify risks and opportunities.</p>
+
+<h3>Content Creation</h3>
+<p><strong>Research Gathering:</strong> Upload source materials and extract relevant quotes, statistics, and arguments for articles and reports.</p>
+
+<p><strong>Fact Checking:</strong> Verify claims by asking questions across multiple authoritative sources. Ensure accuracy without manual cross-referencing.</p>
+
+<p><strong>Content Repurposing:</strong> Chat with long-form content to create summaries, social media posts, and email newsletters. Extract key points for different formats.</p>
+
+<h3>Technical Documentation</h3>
+<p><strong>API Documentation:</strong> Ask "How do I authenticate?" or "What parameters does this endpoint accept?" Get instant answers instead of scrolling through pages.</p>
+
+<p><strong>Troubleshooting:</strong> Upload error logs and documentation. Ask "What causes this error?" and get solutions with references to relevant documentation sections.</p>
+
+<p><strong>Onboarding:</strong> New team members can chat with documentation to get up to speed quickly. Ask questions and get answers without bothering colleagues.</p>
+<h2 id="vs-search">Document Chat vs Traditional Search</h2>
+<p>Understanding the differences helps you choose the right tool for each task:</p>
+
+<h3>Keyword Search</h3>
+<p><strong>How it works:</strong> Finds exact keyword matches in documents.</p>
+<p><strong>Best for:</strong> Finding specific terms, names, or phrases you know exist.</p>
+<p><strong>Limitations:</strong> Misses synonyms, requires exact wording, provides no context, can't synthesize information from multiple sections.</p>
+<p><strong>Example:</strong> Searching for "revenue" won't find "income" or "sales."</p>
+
+<h3>Document Chat</h3>
+<p><strong>How it works:</strong> Understands meaning and intent, searches semantically, synthesizes answers.</p>
+<p><strong>Best for:</strong> Exploratory research, understanding concepts, comparing information, getting summaries.</p>
+<p><strong>Limitations:</strong> Requires clear questions, may occasionally miss very specific details.</p>
+<p><strong>Example:</strong> Asking "How did the company perform financially?" finds relevant information regardless of specific terminology used.</p>
+
+<h3>When to Use Each</h3>
+<p><strong>Use keyword search when:</strong></p>
+<ul>
+<li>You know the exact term you're looking for</li>
+<li>You need to find all instances of a specific word</li>
+<li>You're looking for a name, date, or specific phrase</li>
+</ul>
+
+<p><strong>Use document chat when:</strong></p>
+<ul>
+<li>You're exploring a topic and don't know exact terminology</li>
+<li>You need to understand concepts, not just find keywords</li>
+<li>You want to compare information across multiple documents</li>
+<li>You need summaries or synthesized answers</li>
+<li>You're asking "why" or "how" questions</li>
+</ul>
+
+<h3>The Best Approach: Hybrid</h3>
+<p>Many tools, including DocumentGPT, combine both approaches. Use document chat for exploration and understanding, then use keyword search to find specific references when needed.</p>
+<div class="my-8 p-6 bg-gradient-to-r from-emerald-50 to-cyan-50 rounded-xl border border-emerald-200">
+<h3 class="text-xl font-bold mb-3">Start using AI to automate writing tasks. Free to start.</h3>
+<p class="text-gray-700 mb-4">Upload your first document and experience AI-powered productivity.</p>
+<a href="/app.html" class="inline-block px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-xl hover:opacity-90 transition">Try DocumentGPT Free →</a>
+</div>
+<h2 id="best-practices">Best Practices for Document Chat</h2>
+<p>Get better answers by following these proven strategies:</p>
+
+<h3>1. Ask Specific Questions</h3>
+<p><strong>Instead of:</strong> "Tell me about this document."</p>
+<p><strong>Try:</strong> "What are the three main findings?" or "What methodology was used?"</p>
+<p>Specific questions yield specific, useful answers. Vague questions get vague responses.</p>
+
+<h3>2. Use Follow-Up Questions</h3>
+<p>Document chat maintains conversation context. Build on previous answers:</p>
+<ul>
+<li>"Tell me more about that methodology."</li>
+<li>"What were the limitations of that approach?"</li>
+<li>"How does that compare to the second study?"</li>
+</ul>
+
+<h3>3. Request Citations</h3>
+<p>Always ask "Where did you find that?" or "Can you cite the source?" This helps you verify accuracy and find the original context.</p>
+
+<h3>4. Break Complex Questions Down</h3>
+<p>Instead of asking one massive question, break it into steps:</p>
+<ol>
+<li>"What is the main argument?"</li>
+<li>"What evidence supports this argument?"</li>
+<li>"What counterarguments are addressed?"</li>
+<li>"What is the conclusion?"</li>
+</ol>
+
+<h3>5. Use Comparative Questions</h3>
+<p>When working with multiple documents:</p>
+<ul>
+<li>"How do these studies differ in methodology?"</li>
+<li>"What do all these papers agree on?"</li>
+<li>"Which document provides the most recent data?"</li>
+</ul>
+
+<h3>6. Request Different Formats</h3>
+<p>Ask for information in the format you need:</p>
+<ul>
+<li>"Summarize this in bullet points."</li>
+<li>"Create a table comparing these three approaches."</li>
+<li>"List the key statistics mentioned."</li>
+</ul>
+
+<h3>7. Verify Critical Information</h3>
+<p>For important decisions, always verify AI answers by checking the original document. Use citations to find the source quickly.</p>
+
+<h3>8. Save Useful Conversations</h3>
+<p>Export or save conversations that contain valuable insights. Build a knowledge base of questions and answers for future reference.</p>
+<h2 id="future">The Future of Document Interaction</h2>
+<p>Document chat is just the beginning. Here's where the technology is heading:</p>
+
+<h3>Multimodal Understanding</h3>
+<p>Future systems will understand not just text, but also images, charts, graphs, and tables within documents. Ask "What does the graph on page 12 show?" and get detailed analysis of visual data.</p>
+
+<h3>Proactive Insights</h3>
+<p>Instead of waiting for questions, AI will proactively identify important information, contradictions, and patterns. Upload a document and immediately see "Key insights you should know" without asking.</p>
+
+<h3>Real-Time Collaboration</h3>
+<p>Teams will chat with documents together, seeing each other's questions and building collective understanding. Document chat becomes a collaborative research tool, not just an individual one.</p>
+
+<h3>Integration with Writing</h3>
+<p>Seamless integration between document chat and writing tools. Research and write in the same interface, with AI pulling relevant information from your sources as you draft. This is already possible with <a href="/blog/ai-writing-assistant-productivity.html" class="text-emerald-600 hover:underline">AI writing assistants</a> like DocumentGPT.</p>
+
+<h3>Voice Interaction</h3>
+<p>Ask questions verbally and hear answers read aloud. Perfect for accessibility and for reviewing documents while commuting or exercising.</p>
+
+<h3>Personalized Learning</h3>
+<p>AI will adapt to your knowledge level and learning style. Beginners get simple explanations; experts get technical details. The same document becomes accessible to everyone.</p>
+
+<h3>Cross-Platform Knowledge</h3>
+<p>Chat with documents across all your tools—email, cloud storage, project management systems. Your entire digital workspace becomes conversationally accessible.</p>
+
+<p>These aren't distant dreams—many are already in development. The next 2-3 years will see document chat become as fundamental as search engines are today.</p>
+<h2 id="conclusion">Conclusion: The End of Linear Reading</h2>
+<p>For centuries, we've read documents the same way—start at the beginning, read to the end, hope we remember the important parts. This made sense when documents were rare and information was scarce.</p>
+
+<p>Today, we're drowning in documents. The average knowledge worker encounters hundreds of pages of text daily. Reading everything linearly is impossible. We need a better way to interact with written information.</p>
+
+<p>Document chat is that better way. It transforms documents from static text into dynamic, conversational knowledge sources. Instead of reading everything, you ask questions and get answers. Instead of searching for keywords, you explore ideas through conversation. Instead of working alone, you collaborate with AI that's read and understood every word.</p>
+
+<p>This isn't about replacing reading—it's about reading smarter. Use document chat for exploration and information gathering. Read deeply when you've found something worth your time. Let AI handle the mechanical parts so you can focus on thinking, analyzing, and creating.</p>
+
+<p>The technology is mature, accessible, and ready to use today. The question isn't whether document chat will replace traditional search—it's already happening. The question is: when will you start using it?</p>
+
+<h3>Start Chatting with Your Documents</h3>
+<p>DocumentGPT makes document chat simple and accessible:</p>
+<ul>
+<li>Upload PDFs, Word docs, and text files</li>
+<li>Chat with multiple documents simultaneously</li>
+<li>Get answers with citations and sources</li>
+<li>Export conversations and insights</li>
+<li>Free tier with 10 chats per month</li>
+</ul>
+<p>No credit card required. Start chatting with your documents in under 60 seconds.</p>
+<div class="mt-8 p-8 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl text-white text-center">
+<h3 class="text-2xl font-bold mb-4">Start Using DocumentGPT Today</h3>
+<p class="text-lg mb-6 opacity-90">Free forever • No credit card • 10 chats/month</p>
+<a href="/app.html" class="inline-block px-8 py-4 bg-white text-emerald-600 font-bold rounded-xl hover:bg-gray-50 transition text-lg">Try DocumentGPT Free →</a>
+</div>
+</div>
+</div>
+</article>
+</div>
+</div>
+<footer class="py-16 px-4 border-t border-gray-200 bg-gray-50 mt-20">
+<div class="max-w-7xl mx-auto">
+<div class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
+<div><h4 class="font-semibold text-gray-900 mb-4">Product</h4><ul class="space-y-3 text-sm text-gray-600"><li><a href="/features.html" class="hover:text-gray-900">Features</a></li><li><a href="/pricing.html" class="hover:text-gray-900">Pricing</a></li><li><a href="/use-cases.html" class="hover:text-gray-900">Use Cases</a></li><li><a href="/app.html" class="hover:text-gray-900">Try for Free</a></li></ul></div>
+<div><h4 class="font-semibold text-gray-900 mb-4">Solutions</h4><ul class="space-y-3 text-sm text-gray-600"><li><a href="/use-cases.html#students" class="hover:text-gray-900">For Students</a></li><li><a href="/use-cases.html#researchers" class="hover:text-gray-900">For Researchers</a></li><li><a href="/use-cases.html#writers" class="hover:text-gray-900">For Writers</a></li><li><a href="/teams.html" class="hover:text-gray-900">For Teams</a></li></ul></div>
+<div><h4 class="font-semibold text-gray-900 mb-4">Resources</h4><ul class="space-y-3 text-sm text-gray-600"><li><a href="/blog/index.html" class="hover:text-gray-900">Blog</a></li><li><a href="/blog/how-to-summarize-pdf.html" class="hover:text-gray-900">PDF Guide</a></li><li><a href="/blog/ai-writing-assistant-productivity.html" class="hover:text-gray-900">Writing Tips</a></li><li><a href="/blog/chat-with-documents.html" class="hover:text-gray-900">Chat Guide</a></li></ul></div>
+<div><h4 class="font-semibold text-gray-900 mb-4">Company</h4><ul class="space-y-3 text-sm text-gray-600"><li><a href="/about.html" class="hover:text-gray-900">About</a></li><li><a href="mailto:support@documentgpt.io" class="hover:text-gray-900">Contact</a></li><li><a href="mailto:support@documentgpt.io" class="hover:text-gray-900">Support</a></li></ul></div>
+<div><h4 class="font-semibold text-gray-900 mb-4">Legal</h4><ul class="space-y-3 text-sm text-gray-600"><li><a href="#" class="hover:text-gray-900">Privacy</a></li><li><a href="#" class="hover:text-gray-900">Terms</a></li></ul></div>
+</div>
+<div class="pt-8 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+<a href="/" class="flex items-center gap-2"><div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500"></div><span class="text-xl font-bold">DocumentGPT</span></a>
+<div class="text-sm text-gray-500">© 2024 DocumentGPT. All rights reserved.</div>
+</div>
+</div>
+</footer>
+</body>
+</html>

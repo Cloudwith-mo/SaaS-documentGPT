@@ -1,0 +1,1 @@
+{"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": "{\"status\": \"healthy\", \"environment\": \"dev\", \"rag_enabled\": true, \"timestamp\": \"2025-10-22T18:18:49.531978\"}"}

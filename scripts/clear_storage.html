@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head><title>Clear Storage</title></head>
+<body>
+<h1>Storage Clearer</h1>
+<button onclick="clearAll()">Clear All Storage</button>
+<pre id="output"></pre>
+<script>
+function clearAll() {
+    const output = document.getElementById('output');
+    output.textContent = 'Before:\n';
+    output.textContent += 'dgpt:state:v3: ' + (localStorage.getItem('dgpt:state:v3')?.length || 0) + ' chars\n';
+    output.textContent += 'guest_id: ' + localStorage.getItem('guest_id') + '\n\n';
+    
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    output.textContent += 'After: CLEARED\n';
+    output.textContent += 'Refresh any DocumentGPT page now.';
+}
+</script>
+</body>
+</html>

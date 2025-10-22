@@ -1,1 +1,44 @@
+# Environment variables
 .env
+*.env
+
+# AWS credentials
+.aws/
+aws-credentials.json
+
+# Build artifacts
+*.zip
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Node modules (if any)
+node_modules/
+
+# Python virtual environment
+venv/
+env/
+.venv/
+
+# Test outputs
+test-results/
+coverage/

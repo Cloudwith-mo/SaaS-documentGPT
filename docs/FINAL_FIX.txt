@@ -1,0 +1,68 @@
+FINAL BUG FIX - EXECUTION ORDER
+
+EXTENDED MINI-TEST SERIES
+
+Test 6: How many DOMContentLoaded listeners?
+TWO - Line 1484 and Line 2420
+
+Test 7: What does first listener do?
+FATAL - Calls setActiveDoc() IMMEDIATELY (line 1485)
+
+Test 8: When does initAuth() run?
+LATER - In second listener (line 2420+)
+
+Test 9: What is the problem?
+CRITICAL - setActiveDoc runs BEFORE initAuth
+Result: state.user = null (guest mode not initialized)
+Event listeners attach but user context missing
+
+ROOT CAUSE
+
+Execution Order:
+1. DOMContentLoaded fires
+2. Line 1485: setActiveDoc(state.activeId) runs
+3. state.user is still NULL (initAuth not called yet)
+4. Event listeners attach but without user context
+5. Line 2420+: initAuth() finally runs
+6. state.user gets guest ID
+7. BUT event listeners already attached with null user
+8. Clicks fail because user_id is undefined
+
+FIX APPLIED
+
+Removed premature setActiveDoc call at line 1485
+Now setActiveDoc only runs AFTER initAuth completes
+
+EXPECTED FIXES
+
+ALL features should now work:
+- Guest mode initialized FIRST
+- state.user has guest ID
+- Upload button works
+- Chat sends messages
+- AI agents trigger
+- Settings opens
+- All buttons functional
+
+RE-TEST NOW
+
+URL: https://documentgpt.io/backup.html
+
+Critical Tests:
+1. Upload AAAI PDF
+2. Chat "Hello"
+3. Summary agent
+4. Settings modal
+5. Check browser console for errors
+
+DIAGNOSIS SUMMARY
+
+9 Mini-Tests Total:
+- Test 1-5: Found IIFE timing issue (FIXED)
+- Test 6-9: Found execution order issue (FIXED)
+
+Root Causes:
+1. IIFE ran before DOM ready (FIXED)
+2. setActiveDoc ran before initAuth (FIXED)
+
+Both issues prevented guest mode initialization.

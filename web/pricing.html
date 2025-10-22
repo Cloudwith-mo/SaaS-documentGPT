@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing - DocumentGPT | Free AI Writing Assistant & Document Summarizer</title>
+    <meta name="description" content="Start free with 10 chats/month. Upgrade to Premium for unlimited AI writing assistance and document analysis. $14.99/month or $5.99/month billed annually.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-white">
+    <header class="fixed top-0 w-full bg-white/90 backdrop-blur-sm border-b border-gray-200 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <a href="/" class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500"></div>
+                    <span class="text-xl font-bold">DocumentGPT</span>
+                </a>
+                <nav class="hidden md:flex items-center gap-8">
+                    <a href="/pricing.html" class="text-sm text-gray-900 font-semibold">Pricing</a>
+                    <a href="/teams.html" class="text-sm text-gray-600 hover:text-gray-900">Teams</a>
+                    <a href="/about.html" class="text-sm text-gray-600 hover:text-gray-900">About</a>
+                    <a href="/blog/index.html" class="text-sm text-gray-600 hover:text-gray-900">Blog</a>
+                </nav>
+                <a href="/app.html" class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-semibold rounded-lg">Start free</a>
+            </div>
+        </div>
+    </header>
+
+    <section class="pt-32 pb-12 px-4">
+        <div class="max-w-4xl mx-auto text-center">
+            <h1 class="text-5xl md:text-6xl font-extrabold mb-6">Choose your plan</h1>
+            <p class="text-xl text-gray-600 mb-8">Start free. Upgrade anytime for unlimited power.</p>
+            
+            <!-- Hero Image Placeholder -->
+            <div class="mb-8 rounded-2xl overflow-hidden border border-gray-200 shadow-lg">
+                <div class="bg-gradient-to-br from-emerald-50 to-cyan-50 p-12 text-center">
+                    <p class="text-gray-400 text-sm">📸 Add screenshot of DocumentGPT interface here</p>
+                    <p class="text-gray-400 text-xs mt-2">Recommended: 1200x600px showing chat + document view</p>
+                </div>
+            </div>
+            
+            <!-- Billing Toggle -->
+            <div class="inline-flex items-center gap-3 p-1 bg-gray-100 rounded-lg">
+                <button id="monthlyBtn" class="px-6 py-2 rounded-md font-semibold text-sm transition bg-white text-gray-900 shadow-sm">Monthly</button>
+                <button id="annualBtn" class="px-6 py-2 rounded-md font-semibold text-sm transition text-gray-600 hover:text-gray-900">Annual <span class="ml-1 text-xs text-emerald-600 font-bold">Save 60%</span></button>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-12 px-4">
+        <div class="max-w-5xl mx-auto">
+            <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                <!-- Free -->
+                <div class="p-8 rounded-2xl border-2 border-gray-200 bg-white hover:shadow-xl transition">
+                    <div class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Free</div>
+                    <div class="text-5xl font-bold mb-2">$0</div>
+                    <p class="text-gray-600 mb-6">Perfect for trying it out</p>
+                    <a href="/app.html" class="block w-full py-3 text-center border-2 border-gray-300 rounded-lg font-semibold hover:border-gray-400 transition mb-6">
+                        Start free
+                    </a>
+                    <ul class="space-y-3">
+                        <li class="flex items-center gap-2 text-sm">
+                            <span class="text-emerald-500">✓</span>
+                            <span><strong>10 chats</strong> per month</span>
+                        </li>
+                        <li class="flex items-center gap-2 text-sm">
+                            <span class="text-emerald-500">✓</span>
+                            <span><strong>2 documents</strong></span>
+                        </li>
+                        <li class="flex items-center gap-2 text-sm">
+                            <span class="text-emerald-500">✓</span>
+                            <span>Streaming AI responses</span>
+                        </li>
+                        <li class="flex items-center gap-2 text-sm">
+                            <span class="text-emerald-500">✓</span>
+                            <span>PDF upload & chat</span>
+                        </li>
+                        <li class="flex items-center gap-2 text-sm">
+                            <span class="text-emerald-500">✓</span>
+                            <span>Smart highlights</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Premium -->
+                <div class="p-8 rounded-2xl border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 to-cyan-50 relative hover:shadow-xl transition">
+                    <div class="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-emerald-500 text-white text-xs font-bold rounded-full uppercase">
+                        Most Popular
+                    </div>
+                    <div class="text-sm font-semibold text-emerald-700 uppercase tracking-wide mb-2">Premium</div>
+                    <div class="mb-2">
+                        <div class="text-5xl font-bold">
+                            <span id="premiumPrice">$14.99</span><span class="text-xl text-gray-600">/mo</span>
+                        </div>
+                        <div id="annualDetails" class="text-sm text-gray-600 mt-1 hidden">
+                            Billed $71.95 annually
+                        </div>
+                    </div>
+                    <p class="text-gray-600 mb-6">For power users</p>
+                    <a href="/app.html" class="block w-full py-3 text-center bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg font-semibold hover:opacity-90 transition mb-6">
+                        Upgrade to Premium
+                    </a>
+                    <ul class="space-y-3">
+                        <li class="flex items-center gap-2 text-sm">
+                            <span class="text-emerald-500">✓</span>
+                            <span><strong>Unlimited chats</strong></span>
+                        </li>
+                        <li class="flex items-center gap-2 text-sm">
+                            <span class="text-emerald-500">✓</span>
+                            <span><strong>Unlimited documents</strong></span>
+                        </li>
+                        <li class="flex items-center gap-2 text-sm">
+                            <span class="text-emerald-500">✓</span>
+                            <span>All 6 AI agents</span>
+                        </li>
+                        <li class="flex items-center gap-2 text-sm">
+                            <span class="text-emerald-500">✓</span>
+                            <span>Priority support</span>
+                        </li>
+                        <li class="flex items-center gap-2 text-sm">
+                            <span class="text-emerald-500">✓</span>
+                            <span>Advanced export options</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Feature Comparison Table -->
+    <section class="py-20 px-4 bg-gray-50">
+        <div class="max-w-5xl mx-auto">
+            <h2 class="text-3xl font-bold text-center mb-12">Compare plans</h2>
+            <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th class="text-left p-4 font-semibold text-gray-900">Features</th>
+                            <th class="text-center p-4 font-semibold text-gray-900">Free</th>
+                            <th class="text-center p-4 font-semibold text-emerald-700">Premium</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        <tr>
+                            <td class="p-4 text-sm">AI chats per month</td>
+                            <td class="p-4 text-center text-sm">10</td>
+                            <td class="p-4 text-center text-sm font-semibold text-emerald-600">Unlimited</td>
+                        </tr>
+                        <tr>
+                            <td class="p-4 text-sm">Documents</td>
+                            <td class="p-4 text-center text-sm">2</td>
+                            <td class="p-4 text-center text-sm font-semibold text-emerald-600">Unlimited</td>
+                        </tr>
+                        <tr>
+                            <td class="p-4 text-sm">Streaming AI responses</td>
+                            <td class="p-4 text-center text-emerald-500">✓</td>
+                            <td class="p-4 text-center text-emerald-500">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="p-4 text-sm">PDF upload & chat</td>
+                            <td class="p-4 text-center text-emerald-500">✓</td>
+                            <td class="p-4 text-center text-emerald-500">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="p-4 text-sm">Smart highlights</td>
+                            <td class="p-4 text-center text-emerald-500">✓</td>
+                            <td class="p-4 text-center text-emerald-500">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="p-4 text-sm">Add to Journal</td>
+                            <td class="p-4 text-center text-emerald-500">✓</td>
+                            <td class="p-4 text-center text-emerald-500">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="p-4 text-sm">AI Agents (Email, Calendar, Export)</td>
+                            <td class="p-4 text-center text-gray-400">✗</td>
+                            <td class="p-4 text-center text-emerald-500">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="p-4 text-sm">Priority support</td>
+                            <td class="p-4 text-center text-gray-400">✗</td>
+                            <td class="p-4 text-center text-emerald-500">✓</td>
+                        </tr>
+                        <tr>
+                            <td class="p-4 text-sm">Advanced export (PDF, HTML, CSV)</td>
+                            <td class="p-4 text-center text-gray-400">✗</td>
+                            <td class="p-4 text-center text-emerald-500">✓</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="py-20 px-4">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-3xl font-bold text-center mb-12">Frequently asked questions</h2>
+            <div class="space-y-6">
+                <details class="bg-white p-6 rounded-xl border border-gray-200">
+                    <summary class="font-semibold cursor-pointer">Can I cancel anytime?</summary>
+                    <p class="mt-3 text-gray-600">Yes. Cancel anytime from your account settings. No questions asked. Your data stays safe.</p>
+                </details>
+                <details class="bg-white p-6 rounded-xl border border-gray-200">
+                    <summary class="font-semibold cursor-pointer">What happens when I hit the free limit?</summary>
+                    <p class="mt-3 text-gray-600">You'll see a prompt to upgrade. Your documents and chat history stay safe. Upgrade to continue chatting.</p>
+                </details>
+                <details class="bg-white p-6 rounded-xl border border-gray-200">
+                    <summary class="font-semibold cursor-pointer">Do you offer student discounts?</summary>
+                    <p class="mt-3 text-gray-600">Not yet, but we're working on it! Email support@documentgpt.io with your .edu email to join the waitlist.</p>
+                </details>
+                <details class="bg-white p-6 rounded-xl border border-gray-200">
+                    <summary class="font-semibold cursor-pointer">Is my data private?</summary>
+                    <p class="mt-3 text-gray-600">Yes. Your documents stay in your workspace. We don't train AI models on your data. Your privacy is our priority.</p>
+                </details>
+                <details class="bg-white p-6 rounded-xl border border-gray-200">
+                    <summary class="font-semibold cursor-pointer">What payment methods do you accept?</summary>
+                    <p class="mt-3 text-gray-600">We accept all major credit cards via Stripe. Secure, encrypted, and PCI-compliant.</p>
+                </details>
+                <details class="bg-white p-6 rounded-xl border border-gray-200">
+                    <summary class="font-semibold cursor-pointer">Can I switch between monthly and annual?</summary>
+                    <p class="mt-3 text-gray-600">Yes. Change your billing cycle anytime from your account settings. Prorated automatically.</p>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="py-20 px-4 bg-gradient-to-br from-emerald-500 to-cyan-500">
+        <div class="max-w-4xl mx-auto text-center text-white">
+            <h2 class="text-4xl font-bold mb-6">Ready to write smarter?</h2>
+            <p class="text-xl mb-8 opacity-90">Join thousands using DocumentGPT for research and writing</p>
+            <a href="/app.html" class="inline-block px-8 py-4 bg-white text-emerald-600 font-semibold rounded-lg hover:bg-gray-50 text-lg">
+                Start writing for free
+            </a>
+            <p class="mt-4 text-sm opacity-75">No credit card required • Free forever</p>
+        </div>
+    </section>
+
+    <script>
+        const monthlyBtn = document.getElementById('monthlyBtn');
+        const annualBtn = document.getElementById('annualBtn');
+        const premiumPrice = document.getElementById('premiumPrice');
+        const annualDetails = document.getElementById('annualDetails');
+
+        monthlyBtn.addEventListener('click', () => {
+            monthlyBtn.classList.add('bg-white', 'text-gray-900', 'shadow-sm');
+            monthlyBtn.classList.remove('text-gray-600');
+            annualBtn.classList.remove('bg-white', 'text-gray-900', 'shadow-sm');
+            annualBtn.classList.add('text-gray-600');
+            premiumPrice.textContent = '$14.99';
+            annualDetails.classList.add('hidden');
+        });
+
+        annualBtn.addEventListener('click', () => {
+            annualBtn.classList.add('bg-white', 'text-gray-900', 'shadow-sm');
+            annualBtn.classList.remove('text-gray-600');
+            monthlyBtn.classList.remove('bg-white', 'text-gray-900', 'shadow-sm');
+            monthlyBtn.classList.add('text-gray-600');
+            premiumPrice.textContent = '$5.99';
+            annualDetails.classList.remove('hidden');
+        });
+    </script>
+
+    <footer class="py-16 px-4 border-t border-gray-200 bg-gray-50">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4">Product</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li><a href="/features.html" class="hover:text-gray-900">Features</a></li>
+                        <li><a href="/pricing.html" class="hover:text-gray-900">Pricing</a></li>
+                        <li><a href="/use-cases.html" class="hover:text-gray-900">Use Cases</a></li>
+                        <li><a href="/app.html" class="hover:text-gray-900">Try for Free</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4">Solutions</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li><a href="/use-cases.html#students" class="hover:text-gray-900">For Students</a></li>
+                        <li><a href="/use-cases.html#researchers" class="hover:text-gray-900">For Researchers</a></li>
+                        <li><a href="/use-cases.html#writers" class="hover:text-gray-900">For Writers</a></li>
+                        <li><a href="/teams.html" class="hover:text-gray-900">For Teams</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4">Resources</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li><a href="/blog/index.html" class="hover:text-gray-900">Blog</a></li>
+                        <li><a href="/blog/how-to-summarize-pdf.html" class="hover:text-gray-900">PDF Guide</a></li>
+                        <li><a href="/blog/ai-writing-assistant-productivity.html" class="hover:text-gray-900">Writing Tips</a></li>
+                        <li><a href="/blog/chat-with-documents.html" class="hover:text-gray-900">Chat Guide</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4">Company</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li><a href="/about.html" class="hover:text-gray-900">About</a></li>
+                        <li><a href="mailto:support@documentgpt.io" class="hover:text-gray-900">Contact</a></li>
+                        <li><a href="mailto:support@documentgpt.io" class="hover:text-gray-900">Support</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-900 mb-4">Legal</h4>
+                    <ul class="space-y-3 text-sm text-gray-600">
+                        <li><a href="#" class="hover:text-gray-900">Privacy</a></li>
+                        <li><a href="#" class="hover:text-gray-900">Terms</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="pt-8 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500"></div>
+                    <span class="text-xl font-bold">DocumentGPT</span>
+                </div>
+                <div class="text-sm text-gray-500">© 2024 DocumentGPT. All rights reserved.</div>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

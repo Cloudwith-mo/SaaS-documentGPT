@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocumentGPT Test Runner</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #10b981, #06b6d4);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .pass { background: #d1fae5; border-left: 4px solid #10b981; }
+        .fail { background: #fee2e2; border-left: 4px solid #ef4444; }
+        .pending { background: #fef3c7; border-left: 4px solid #f59e0b; }
+        button {
+            background: linear-gradient(135deg, #10b981, #06b6d4);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .summary {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .summary.success { background: #d1fae5; color: #065f46; }
+        .summary.failure { background: #fee2e2; color: #991b1b; }
+        iframe { display: none; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧪 DocumentGPT Test Runner</h1>
+        <p>Automated testing for button functionality and user flows</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Quick Tests</h2>
+        <button onclick="runQuickTest()">Run Quick Test (5 tests)</button>
+        <button onclick="runFullTest()">Run Full Test (10 tests)</button>
+        <button onclick="openLive()">Open Live Site</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Results</h2>
+        <div id="results"></div>
+        <div id="summary"></div>
+    </div>
+
+    <iframe id="testFrame" src="backup.html"></iframe>
+
+    <script>
+        const results = document.getElementById('results');
+        const summary = document.getElementById('summary');
+        let testResults = [];
+
+        function log(status, message) {
+            const div = document.createElement('div');
+            div.className = `test-result ${status}`;
+            div.textContent = `${status === 'pass' ? '✅' : status === 'fail' ? '❌' : '⏳'} ${message}`;
+            results.appendChild(div);
+            testResults.push({status, message});
+        }
+
+        function clearResults() {
+            results.innerHTML = '';
+            summary.innerHTML = '';
+            testResults = [];
+        }
+
+        function showSummary() {
+            const passed = testResults.filter(r => r.status === 'pass').length;
+            const failed = testResults.filter(r => r.status === 'fail').length;
+            const total = testResults.length;
+
+            const div = document.createElement('div');
+            div.className = `summary ${failed === 0 ? 'success' : 'failure'}`;
+            div.innerHTML = `
+                <div>📊 Test Summary</div>
+                <div>Total: ${total} | Passed: ${passed} ✅ | Failed: ${failed} ❌</div>
+                ${failed === 0 ? '<div>🎉 All tests passed!</div>' : '<div>⚠️ Some tests failed</div>'}
+            `;
+            summary.appendChild(div);
+        }
+
+        function openLive() {
+            window.open('https://documentgpt.io/backup.html', '_blank');
+        }
+
+        async function runQuickTest() {
+            clearResults();
+            log('pending', 'Starting quick test suite...');
+
+            const frame = document.getElementById('testFrame');
+            const doc = frame.contentDocument || frame.contentWindow.document;
+
+            await new Promise(resolve => {
+                if (frame.contentWindow.document.readyState === 'complete') {
+                    resolve();
+                } else {
+                    frame.onload = resolve;
+                }
+            });
+
+            // Wait for app initialization
+            await new Promise(r => setTimeout(r, 2000));
+
+            // Test 1: Button Existence
+            const buttons = ['uploadBtn', 'newBtn', 'sendBtn', 'summaryAgent', 'upgradeBtn'];
+            let allFound = true;
+            for (const id of buttons) {
+                const btn = doc.getElementById(id);
+                if (!btn) {
+                    log('fail', `Button ${id} not found`);
+                    allFound = false;
+                }
+            }
+            if (allFound) log('pass', 'All critical buttons exist');
+
+            // Test 2: Event Handlers
+            const newBtn = doc.getElementById('newBtn');
+            if (newBtn && newBtn.onclick) {
+                log('pass', 'New button has onclick handler');
+            } else {
+                log('fail', 'New button missing onclick handler');
+            }
+
+            // Test 3: Editor Exists
+            const editor = doc.getElementById('editor');
+            if (editor && editor.contentEditable === 'true') {
+                log('pass', 'Editor is editable');
+            } else {
+                log('fail', 'Editor not editable');
+            }
+
+            // Test 4: Chat Elements
+            const chatInput = doc.getElementById('chatInput');
+            const sendBtn = doc.getElementById('sendBtn');
+            if (chatInput && sendBtn) {
+                log('pass', 'Chat elements exist');
+            } else {
+                log('fail', 'Chat elements missing');
+            }
+
+            // Test 5: State Initialization
+            if (frame.contentWindow.state && frame.contentWindow.state.docs) {
+                log('pass', 'App state initialized');
+            } else {
+                log('fail', 'App state not initialized');
+            }
+
+            showSummary();
+        }
+
+        async function runFullTest() {
+            clearResults();
+            log('pending', 'Starting full test suite...');
+
+            const frame = document.getElementById('testFrame');
+            const doc = frame.contentDocument || frame.contentWindow.document;
+            const win = frame.contentWindow;
+
+            await new Promise(resolve => {
+                if (doc.readyState === 'complete') {
+                    resolve();
+                } else {
+                    frame.onload = resolve;
+                }
+            });
+
+            // Wait for initialization
+            await new Promise(r => setTimeout(r, 2000));
+
+            // Test 1: All Buttons Exist
+            const allButtons = [
+                'uploadBtn', 'newBtn', 'sendBtn', 'summaryAgent', 'emailAgent',
+                'sheetsAgent', 'calendarAgent', 'saveAgent', 'exportAgent',
+                'upgradeBtn', 'loginBtn', 'signupBtn', 'themeBtn', 'focusBtn',
+                'boldBtn', 'italicBtn', 'underlineBtn', 'settingsBtn', 'paletteBtn'
+            ];
+            
+            let missing = 0;
+            for (const id of allButtons) {
+                if (!doc.getElementById(id)) missing++;
+            }
+            
+            if (missing === 0) {
+                log('pass', `All ${allButtons.length} buttons exist`);
+            } else {
+                log('fail', `${missing} buttons missing`);
+            }
+
+            // Test 2: Create New Document
+            try {
+                const initialCount = win.state.docs.length;
+                const newBtn = doc.getElementById('newBtn');
+                newBtn.click();
+                await new Promise(r => setTimeout(r, 500));
+                if (win.state.docs.length > initialCount) {
+                    log('pass', 'New document creation works');
+                } else {
+                    log('fail', 'New document not created');
+                }
+            } catch (e) {
+                log('fail', 'New document test failed: ' + e.message);
+            }
+
+            // Test 3: Editor Input
+            try {
+                const editor = doc.getElementById('editor');
+                editor.textContent = 'Test content';
+                editor.dispatchEvent(new Event('input', {bubbles: true}));
+                await new Promise(r => setTimeout(r, 500));
+                const wordCount = doc.getElementById('wordCount').textContent;
+                if (wordCount !== '0') {
+                    log('pass', 'Editor input and stats work');
+                } else {
+                    log('fail', 'Word count not updating');
+                }
+            } catch (e) {
+                log('fail', 'Editor test failed: ' + e.message);
+            }
+
+            // Test 4: Theme Toggle
+            try {
+                const themeBtn = doc.getElementById('themeBtn');
+                const initial = doc.body.getAttribute('data-theme');
+                themeBtn.click();
+                await new Promise(r => setTimeout(r, 300));
+                const after = doc.body.getAttribute('data-theme');
+                if (initial !== after) {
+                    log('pass', 'Theme toggle works');
+                } else {
+                    log('fail', 'Theme did not change');
+                }
+            } catch (e) {
+                log('fail', 'Theme test failed: ' + e.message);
+            }
+
+            // Test 5: Focus Mode
+            try {
+                const focusBtn = doc.getElementById('focusBtn');
+                focusBtn.click();
+                await new Promise(r => setTimeout(r, 300));
+                const leftHidden = doc.getElementById('leftSidebar').classList.contains('hidden');
+                if (leftHidden) {
+                    log('pass', 'Focus mode works');
+                    focusBtn.click(); // Toggle back
+                } else {
+                    log('fail', 'Focus mode did not hide sidebars');
+                }
+            } catch (e) {
+                log('fail', 'Focus mode test failed: ' + e.message);
+            }
+
+            // Test 6: Zoom Controls
+            try {
+                const zoomIn = doc.getElementById('zoomIn');
+                const zoomLabel = doc.getElementById('zoomLabel');
+                const initial = zoomLabel.textContent;
+                zoomIn.click();
+                await new Promise(r => setTimeout(r, 300));
+                const after = zoomLabel.textContent;
+                if (initial !== after) {
+                    log('pass', 'Zoom controls work');
+                } else {
+                    log('fail', 'Zoom did not change');
+                }
+            } catch (e) {
+                log('fail', 'Zoom test failed: ' + e.message);
+            }
+
+            // Test 7: Command Palette
+            try {
+                const paletteBtn = doc.getElementById('paletteBtn');
+                paletteBtn.click();
+                await new Promise(r => setTimeout(r, 300));
+                const palette = doc.getElementById('palette');
+                if (palette.classList.contains('flex')) {
+                    log('pass', 'Command palette opens');
+                    doc.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}));
+                } else {
+                    log('fail', 'Command palette did not open');
+                }
+            } catch (e) {
+                log('fail', 'Palette test failed: ' + e.message);
+            }
+
+            // Test 8: Settings Modal
+            try {
+                const settingsBtn = doc.getElementById('settingsBtn');
+                settingsBtn.click();
+                await new Promise(r => setTimeout(r, 300));
+                const modal = doc.getElementById('settingsModal');
+                if (modal) {
+                    log('pass', 'Settings modal opens');
+                    modal.remove();
+                } else {
+                    log('fail', 'Settings modal did not open');
+                }
+            } catch (e) {
+                log('fail', 'Settings test failed: ' + e.message);
+            }
+
+            // Test 9: Agent Buttons
+            try {
+                const agents = ['summaryAgent', 'emailAgent', 'sheetsAgent', 'calendarAgent', 'saveAgent', 'exportAgent'];
+                let allWork = true;
+                for (const id of agents) {
+                    const btn = doc.getElementById(id);
+                    if (!btn || !btn.onclick) allWork = false;
+                }
+                if (allWork) {
+                    log('pass', 'All agent buttons have handlers');
+                } else {
+                    log('fail', 'Some agent buttons missing handlers');
+                }
+            } catch (e) {
+                log('fail', 'Agent test failed: ' + e.message);
+            }
+
+            // Test 10: State Persistence
+            try {
+                const saved = localStorage.getItem('dgpt:state:v3');
+                if (saved) {
+                    const state = JSON.parse(saved);
+                    if (state.docs && state.user) {
+                        log('pass', 'State persists in localStorage');
+                    } else {
+                        log('fail', 'State incomplete');
+                    }
+                } else {
+                    log('fail', 'No state in localStorage');
+                }
+            } catch (e) {
+                log('fail', 'State test failed: ' + e.message);
+            }
+
+            showSummary();
+        }
+
+        // Auto-run quick test on load
+        window.onload = () => {
+            setTimeout(() => {
+                log('pending', 'Page loaded. Click "Run Quick Test" to start.');
+            }, 500);
+        };
+    </script>
+</body>
+</html>

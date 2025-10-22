@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Button Test - DocumentGPT</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #f5f5f5; }
+        .test { margin: 10px 0; padding: 10px; background: white; border-radius: 5px; }
+        .pass { border-left: 4px solid #10b981; }
+        .fail { border-left: 4px solid #ef4444; }
+        .pending { border-left: 4px solid #f59e0b; }
+    </style>
+</head>
+<body>
+    <h1>🧪 DocumentGPT Button Test Suite</h1>
+    <div id="results"></div>
+    
+    <script>
+        const tests = [];
+        const results = document.getElementById('results');
+        
+        function test(name, fn) {
+            tests.push({name, fn});
+        }
+        
+        function log(name, status, message) {
+            const div = document.createElement('div');
+            div.className = `test ${status}`;
+            div.innerHTML = `<strong>${status.toUpperCase()}</strong>: ${name}<br><small>${message}</small>`;
+            results.appendChild(div);
+        }
+        
+        // Define all button tests
+        test('Upload Button', () => {
+            const btn = document.getElementById('uploadBtn');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'Upload button wired correctly';
+        });
+        
+        test('New Document Button', () => {
+            const btn = document.getElementById('newBtn');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'New button wired correctly';
+        });
+        
+        test('Send Chat Button', () => {
+            const btn = document.getElementById('sendBtn');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'Send button wired correctly';
+        });
+        
+        test('Summary Agent', () => {
+            const btn = document.getElementById('summaryAgent');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'Summary agent wired correctly';
+        });
+        
+        test('Email Agent', () => {
+            const btn = document.getElementById('emailAgent');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'Email agent wired correctly';
+        });
+        
+        test('Export Agent', () => {
+            const btn = document.getElementById('exportAgent');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'Export agent wired correctly';
+        });
+        
+        test('Upgrade Button', () => {
+            const btn = document.getElementById('upgradeBtn');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'Upgrade button wired correctly';
+        });
+        
+        test('Login Button', () => {
+            const btn = document.getElementById('loginBtn');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'Login button wired correctly';
+        });
+        
+        test('Theme Toggle', () => {
+            const btn = document.getElementById('themeBtn');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'Theme button wired correctly';
+        });
+        
+        test('Focus Mode', () => {
+            const btn = document.getElementById('focusBtn');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'Focus button wired correctly';
+        });
+        
+        test('Bold Format', () => {
+            const btn = document.getElementById('boldBtn');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'Bold button wired correctly';
+        });
+        
+        test('Settings Button', () => {
+            const btn = document.getElementById('settingsBtn');
+            if (!btn) throw new Error('Button not found');
+            if (!btn.onclick) throw new Error('No onclick handler');
+            return 'Settings button wired correctly';
+        });
+        
+        // Load backup.html in iframe and run tests
+        const iframe = document.createElement('iframe');
+        iframe.src = 'backup.html';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        
+        iframe.onload = () => {
+            setTimeout(() => {
+                const doc = iframe.contentDocument || iframe.contentWindow.document;
+                
+                // Override document methods for testing
+                const originalGetElementById = doc.getElementById.bind(doc);
+                window.document.getElementById = originalGetElementById;
+                
+                tests.forEach(({name, fn}) => {
+                    try {
+                        const message = fn();
+                        log(name, 'pass', message);
+                    } catch (e) {
+                        log(name, 'fail', e.message);
+                    }
+                });
+                
+                const passed = document.querySelectorAll('.pass').length;
+                const failed = document.querySelectorAll('.fail').length;
+                const total = tests.length;
+                
+                const summary = document.createElement('div');
+                summary.style.cssText = 'margin-top: 20px; padding: 20px; background: white; border-radius: 10px; font-size: 18px;';
+                summary.innerHTML = `
+                    <strong>Test Summary:</strong><br>
+                    ✅ Passed: ${passed}/${total}<br>
+                    ❌ Failed: ${failed}/${total}<br>
+                    ${failed === 0 ? '<br>🎉 All tests passed!' : '<br>⚠️ Some tests failed'}
+                `;
+                results.appendChild(summary);
+            }, 2000);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Introducing DocumentGPT: Your AI Document Assistant - DocumentGPT</title>
+<meta name="description" content="Upload PDFs, chat with your documents, and get instant insights with our free AI-powered tool. Learn what makes DocumentGPT different.">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+body{font-family:'Inter',sans-serif;background:#fff}
+.content{line-height:1.8}
+.content h2{font-size:1.75rem;font-weight:700;margin-top:3rem;margin-bottom:1rem;color:#047857;scroll-margin-top:100px}
+.content h3{font-size:1.25rem;font-weight:600;margin-top:2rem;margin-bottom:0.75rem;color:#059669}
+.content p{margin-bottom:1.25rem;color:#374151;font-size:1.05rem}
+.content ul{list-style:disc;margin-left:2rem;margin-bottom:1.5rem}
+.content ol{list-style:decimal;margin-left:2rem;margin-bottom:1.5rem}
+.content li{margin-bottom:0.75rem;color:#4b5563}
+.toc{position:sticky;top:100px}
+.toc a{transition:all 0.2s}
+.toc a:hover{color:#047857}
+</style>
+</head>
+<body>
+<header class="fixed top-0 w-full bg-white/90 backdrop-blur-sm border-b border-gray-200 z-50">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex justify-between items-center h-16">
+<a href="/" class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500"></div>
+<span class="text-xl font-bold">DocumentGPT</span>
+</a>
+<nav class="hidden md:flex items-center gap-8">
+<a href="/pricing.html" class="text-sm text-gray-600 hover:text-gray-900">Pricing</a>
+<a href="/teams.html" class="text-sm text-gray-600 hover:text-gray-900">Teams</a>
+<a href="/about.html" class="text-sm text-gray-600 hover:text-gray-900">About</a>
+<a href="/blog/index.html" class="text-sm text-gray-600 hover:text-gray-900">Blog</a>
+</nav>
+<a href="/app.html" class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-semibold rounded-lg">Start free</a>
+</div>
+</div>
+</header>
+<div class="max-w-7xl mx-auto px-4 pt-24 pb-12">
+<a href="/blog/index.html" class="text-emerald-600 hover:text-emerald-700 mb-8 inline-block">← Back to Blog</a>
+<div class="grid lg:grid-cols-4 gap-12">
+<aside class="lg:col-span-1 hidden lg:block">
+<div class="toc bg-gray-50 rounded-xl p-6 border border-gray-200">
+<h3 class="font-bold text-sm uppercase tracking-wide text-gray-900 mb-4">Table of Contents</h3>
+<nav class="space-y-2 text-sm">
+<a href="#introduction" class="block text-gray-600 hover:text-emerald-600">Why We Built This</a>
+<a href="#features" class="block text-gray-600 hover:text-emerald-600">Key Features</a>
+<a href="#how-it-works" class="block text-gray-600 hover:text-emerald-600">How It Works</a>
+<a href="#use-cases" class="block text-gray-600 hover:text-emerald-600">Who It's For</a>
+<a href="#pricing" class="block text-gray-600 hover:text-emerald-600">Pricing</a>
+<a href="#roadmap" class="block text-gray-600 hover:text-emerald-600">What's Next</a>
+<a href="#get-started" class="block text-gray-600 hover:text-emerald-600">Get Started</a>
+<a href="#conclusion" class="block text-gray-600 hover:text-emerald-600">Join Us</a>
+</nav>
+</div>
+</aside>
+<article class="lg:col-span-3">
+<div class="bg-white rounded-2xl border border-gray-200 p-8 lg:p-12 shadow-sm">
+<div class="mb-8">
+<div class="text-6xl mb-4">🚀</div>
+<h1 class="text-4xl lg:text-5xl font-bold text-gray-900 mb-4">Introducing DocumentGPT: Your AI Document Assistant</h1>
+<div class="flex gap-4 text-sm text-gray-500 mb-6">
+<span>📅 Dec 2024</span>
+<span>⏱️ 8 min read</span>
+<span>✍️ Announcement</span>
+</div>
+<p class="text-xl text-gray-600 leading-relaxed">Upload PDFs, chat with your documents, and get instant insights with our free AI-powered tool. Learn what makes DocumentGPT different.</p>
+</div>
+<div class="content">
+<h2 id="introduction">Why We Built DocumentGPT</h2>
+<p>We've all been there: staring at a 50-page PDF, knowing the answer to your question is somewhere inside, but dreading the hours of reading required to find it. Or facing a literature review with 30 research papers, wondering how you'll ever read them all.</p>
+
+<p>Traditional document tools haven't evolved in decades. We still read linearly, search for keywords, and manually take notes. Meanwhile, the volume of documents we need to process has exploded. The average knowledge worker encounters 100+ pages of text daily. Reading everything is impossible.</p>
+
+<p>We built DocumentGPT to solve this problem. Instead of reading documents, you chat with them. Instead of searching for keywords, you ask questions in natural language. Instead of working with one document at a time, you analyze dozens simultaneously.</p>
+
+<p>The result? Research that used to take days now takes hours. Understanding that required careful reading now comes from simple questions. Work that was stressful and overwhelming becomes manageable and even enjoyable.</p>
+
+<h2 id="features">Key Features That Make DocumentGPT Different</h2>
+
+<h3>1. Multi-Document Chat</h3>
+<p>Upload 20, 30, or 50 documents and chat with all of them simultaneously. Ask "What do these papers say about climate change?" and get answers synthesized from all sources with citations.</p>
+<p>This is our killer feature. Most tools only work with one document at a time. DocumentGPT handles your entire research library at once.</p>
+
+<h3>2. Dual Writing Modes</h3>
+<p><strong>Journal Mode:</strong> Free-form writing with AI assistance. Perfect for brainstorming, drafting, and creative work.</p>
+<p><strong>Research Mode:</strong> Document-focused analysis. Upload sources and write with AI pulling relevant information as you work.</p>
+<p>Switch between modes seamlessly based on your task.</p>
+
+<h3>3. Smart Citations</h3>
+<p>Every AI answer includes citations showing exactly where information came from. Click a citation to jump to that section in the original document. Generate bibliographies in APA, MLA, Chicago, or Harvard format automatically.</p>
+
+<h3>4. Interactive Agents</h3>
+<p>Six specialized AI agents for different tasks:</p>
+<ul>
+<li><strong>Summarizer:</strong> Extract key points from any document</li>
+<li><strong>Analyzer:</strong> Deep analysis of themes and patterns</li>
+<li><strong>Comparator:</strong> Compare multiple documents side-by-side</li>
+<li><strong>Extractor:</strong> Pull specific data, quotes, or statistics</li>
+<li><strong>Synthesizer:</strong> Combine information from multiple sources</li>
+<li><strong>Critic:</strong> Identify weaknesses and gaps in arguments</li>
+</ul>
+
+<h3>5. Smart Highlights</h3>
+<p>AI automatically highlights important passages, key statistics, and action items. Scan documents visually without reading every word.</p>
+
+<h3>6. Conversation History</h3>
+<p>All your chats are saved automatically. Return to previous conversations, build on past analysis, and create a searchable knowledge base over time.</p>
+
+<h3>7. Export Everything</h3>
+<p>Export summaries, highlights, and conversations to PDF, Word, Markdown, or plain text. Integrate with your existing workflow seamlessly.</p>
+
+<h2 id="how-it-works">How DocumentGPT Works</h2>
+<p>Using DocumentGPT is simple:</p>
+
+<h3>Step 1: Upload Documents</h3>
+<p>Drag and drop PDFs, Word docs, or text files. Upload one document or dozens. Processing takes 10-30 seconds depending on length.</p>
+
+<h3>Step 2: Ask Questions</h3>
+<p>Type questions in natural language:</p>
+<ul>
+<li>"What are the main findings?"</li>
+<li>"Summarize the methodology section"</li>
+<li>"What do these papers agree on?"</li>
+<li>"Extract all statistics about revenue growth"</li>
+</ul>
+
+<h3>Step 3: Get Answers with Citations</h3>
+<p>AI analyzes your documents and provides comprehensive answers with citations. Click citations to verify sources and dive deeper.</p>
+
+<h3>Step 4: Follow Up</h3>
+<p>Ask follow-up questions to explore topics further. The AI maintains conversation context, building on previous answers.</p>
+
+<h3>Step 5: Export and Use</h3>
+<p>Export insights, summaries, and citations to your preferred format. Use them in papers, reports, presentations, or any other work.</p>
+
+<p>That's it. No complex setup, no training required. If you can ask a question, you can use DocumentGPT. Learn more about <a href="/blog/chat-with-documents.html" class="text-emerald-600 hover:underline">how document chat works</a>.</p>
+<div class="my-8 p-6 bg-gradient-to-r from-emerald-50 to-cyan-50 rounded-xl border border-emerald-200">
+<h3 class="text-xl font-bold mb-3">Start using AI to automate writing tasks. Free to start.</h3>
+<p class="text-gray-700 mb-4">Upload your first document and experience AI-powered productivity.</p>
+<a href="/app.html" class="inline-block px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-xl hover:opacity-90 transition">Try DocumentGPT Free →</a>
+</div>
+<h2 id="use-cases">Who DocumentGPT Is For</h2>
+
+<h3>Students and Researchers</h3>
+<p>Complete literature reviews in hours instead of weeks. Analyze dozens of research papers simultaneously. Generate citations automatically. Perfect for thesis work, research papers, and exam preparation.</p>
+<p>Students report 80% time savings on research tasks. One PhD student completed her literature review in 2 weeks instead of 3 months. Read the full guide on <a href="/blog/ai-thesis-literature-review.html" class="text-emerald-600 hover:underline">using AI for thesis research</a>.</p>
+
+<h3>Consultants and Freelancers</h3>
+<p>Analyze client documents quickly. Write proposals in hours instead of days. Extract insights from market research and competitive analysis instantly.</p>
+<p>One consultant wrote a winning $15K proposal in 1 hour using DocumentGPT. Read the <a href="/blog/ai-proposal-case-study.html" class="text-emerald-600 hover:underline">full case study</a>.</p>
+
+<h3>Business Professionals</h3>
+<p>Analyze reports, contracts, and business documents efficiently. Extract action items and key decisions from meeting notes. Synthesize information from multiple sources for presentations.</p>
+<p>Professionals save 10+ hours weekly on document-related tasks. Learn about <a href="/blog/ai-writing-assistant-productivity.html" class="text-emerald-600 hover:underline">AI productivity strategies</a>.</p>
+
+<h3>Content Creators and Writers</h3>
+<p>Research articles faster. Extract quotes and statistics from source materials. Verify facts across multiple documents. Transform long-form content into summaries and social posts.</p>
+<p>Writers report 60% faster research and 40% faster drafting with AI assistance.</p>
+
+<h3>Legal and Compliance Teams</h3>
+<p>Analyze contracts and legal documents quickly. Find specific clauses and terms instantly. Compare documents to identify differences and risks.</p>
+<p>Legal professionals save hours on document review and due diligence.</p>
+
+<h2 id="pricing">Simple, Transparent Pricing</h2>
+
+<h3>Free Forever Plan</h3>
+<p><strong>$0/month</strong></p>
+<ul>
+<li>10 chats per month</li>
+<li>Upload unlimited documents</li>
+<li>All core features included</li>
+<li>No credit card required</li>
+<li>Perfect for trying DocumentGPT</li>
+</ul>
+
+<h3>Premium Plan</h3>
+<p><strong>$14.99/month</strong></p>
+<ul>
+<li>Unlimited chats</li>
+<li>Unlimited documents</li>
+<li>Priority processing</li>
+<li>Advanced agents</li>
+<li>Export to all formats</li>
+<li>Email support</li>
+</ul>
+
+<h3>Why This Pricing?</h3>
+<p>We wanted DocumentGPT accessible to everyone, especially students. The free tier is genuinely useful—not a trial. Many users never need to upgrade.</p>
+<p>Premium pricing is intentionally affordable. At $14.99/month, it's less than the cost of two coffees. For the time savings—often 10+ hours weekly—the ROI is immediate.</p>
+<p>No enterprise pricing, no hidden fees, no per-document charges. Just simple, honest pricing.</p>
+
+<h2 id="roadmap">What's Coming Next</h2>
+<p>DocumentGPT is just getting started. Here's what we're building:</p>
+
+<h3>Q1 2025: Enhanced Collaboration</h3>
+<ul>
+<li>Team workspaces for shared documents</li>
+<li>Collaborative chat sessions</li>
+<li>Shared knowledge bases</li>
+<li>Team analytics and insights</li>
+</ul>
+
+<h3>Q2 2025: Advanced Analysis</h3>
+<ul>
+<li>Chart and graph understanding</li>
+<li>Table extraction and analysis</li>
+<li>Image and diagram interpretation</li>
+<li>Multi-language support</li>
+</ul>
+
+<h3>Q3 2025: Integration Ecosystem</h3>
+<ul>
+<li>Google Drive integration</li>
+<li>Dropbox and OneDrive support</li>
+<li>Notion and Obsidian plugins</li>
+<li>API for custom integrations</li>
+</ul>
+
+<h3>Q4 2025: AI Writing Suite</h3>
+<ul>
+<li>Advanced writing assistance</li>
+<li>Style and tone customization</li>
+<li>Template library</li>
+<li>Publishing integrations</li>
+</ul>
+
+<p>We're building based on user feedback. Join our community and help shape the future of DocumentGPT.</p>
+<div class="my-8 p-6 bg-gradient-to-r from-emerald-50 to-cyan-50 rounded-xl border border-emerald-200">
+<h3 class="text-xl font-bold mb-3">Start using AI to automate writing tasks. Free to start.</h3>
+<p class="text-gray-700 mb-4">Upload your first document and experience AI-powered productivity.</p>
+<a href="/app.html" class="inline-block px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-xl hover:opacity-90 transition">Try DocumentGPT Free →</a>
+</div>
+<h2 id="get-started">Get Started in 60 Seconds</h2>
+<p>Ready to transform how you work with documents? Here's how to start:</p>
+
+<h3>1. Visit DocumentGPT</h3>
+<p>Go to <a href="/app.html" class="text-emerald-600 hover:underline">documentgpt.io/app.html</a>. No download or installation required. Works in any modern browser.</p>
+
+<h3>2. Sign Up (Optional)</h3>
+<p>Create a free account to save your work. Or try it without signing up—we don't require registration to test the tool.</p>
+
+<h3>3. Upload a Document</h3>
+<p>Drag and drop any PDF, Word doc, or text file. Start with something you need to read anyway—a research paper, report, or article.</p>
+
+<h3>4. Ask Your First Question</h3>
+<p>Try something simple: "What is this document about?" or "Summarize the main points." See how fast and accurate the AI is.</p>
+
+<h3>5. Explore Further</h3>
+<p>Ask follow-up questions. Upload more documents. Try different agents. Discover how much time you can save.</p>
+
+<h3>Resources to Help You</h3>
+<ul>
+<li><a href="/blog/how-to-summarize-pdf.html" class="text-emerald-600 hover:underline">How to Summarize PDFs with AI</a> - Complete guide</li>
+<li><a href="/blog/ai-research-tools-students.html" class="text-emerald-600 hover:underline">Top AI Research Tools</a> - Tool comparison</li>
+<li><a href="/features.html" class="text-emerald-600 hover:underline">Features</a> - Full feature list</li>
+<li><a href="/use-cases.html" class="text-emerald-600 hover:underline">Use Cases</a> - Real-world examples</li>
+</ul>
+
+<h2 id="conclusion">Join the DocumentGPT Community</h2>
+<p>We're building more than a tool—we're building a community of people who work smarter with AI.</p>
+
+<h3>Our Mission</h3>
+<p>Make AI-powered document analysis accessible to everyone. No expensive enterprise software. No complex training. Just simple, powerful tools that save time and reduce stress.</p>
+
+<h3>Our Values</h3>
+<ul>
+<li><strong>Accessibility:</strong> Free tier that's genuinely useful</li>
+<li><strong>Transparency:</strong> Clear pricing, no hidden fees</li>
+<li><strong>Privacy:</strong> Your documents are yours. We don't train on your data</li>
+<li><strong>Quality:</strong> Accurate AI that you can trust</li>
+<li><strong>Support:</strong> Real humans who actually help</li>
+</ul>
+
+<h3>Early Adopter Benefits</h3>
+<p>Join now and get:</p>
+<ul>
+<li>Lifetime discount on Premium (lock in $14.99/month forever)</li>
+<li>Priority access to new features</li>
+<li>Direct line to our product team</li>
+<li>Influence on our roadmap</li>
+<li>Early adopter badge in your profile</li>
+</ul>
+
+<h3>What Users Are Saying</h3>
+<p>"DocumentGPT saved me 40 hours on my thesis literature review. I can't imagine going back to the old way." - Sarah, PhD Student</p>
+
+<p>"I wrote a winning $15K proposal in 1 hour. This tool paid for itself 1,000x over." - Mike, Consultant</p>
+
+<p>"Finally, a tool that actually understands my documents. The multi-document chat is a game-changer." - Jennifer, Researcher</p>
+
+<h3>Ready to Transform Your Workflow?</h3>
+<p>DocumentGPT is live and ready to use. Free tier requires no credit card. Premium is just $14.99/month. The time savings start immediately.</p>
+
+<p>Join thousands of students, researchers, and professionals who are already working smarter with AI.</p>
+
+<p>The future of document work is conversational. The future is here. Welcome to DocumentGPT.</p>
+<div class="mt-8 p-8 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl text-white text-center">
+<h3 class="text-2xl font-bold mb-4">Start Using DocumentGPT Today</h3>
+<p class="text-lg mb-6 opacity-90">Free forever • No credit card • 10 chats/month</p>
+<a href="/app.html" class="inline-block px-8 py-4 bg-white text-emerald-600 font-bold rounded-xl hover:bg-gray-50 transition text-lg">Try DocumentGPT Free →</a>
+</div>
+</div>
+</div>
+</article>
+</div>
+</div>
+<footer class="py-16 px-4 border-t border-gray-200 bg-gray-50 mt-20">
+<div class="max-w-7xl mx-auto">
+<div class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
+<div><h4 class="font-semibold text-gray-900 mb-4">Product</h4><ul class="space-y-3 text-sm text-gray-600"><li><a href="/features.html" class="hover:text-gray-900">Features</a></li><li><a href="/pricing.html" class="hover:text-gray-900">Pricing</a></li><li><a href="/use-cases.html" class="hover:text-gray-900">Use Cases</a></li><li><a href="/app.html" class="hover:text-gray-900">Try for Free</a></li></ul></div>
+<div><h4 class="font-semibold text-gray-900 mb-4">Solutions</h4><ul class="space-y-3 text-sm text-gray-600"><li><a href="/use-cases.html#students" class="hover:text-gray-900">For Students</a></li><li><a href="/use-cases.html#researchers" class="hover:text-gray-900">For Researchers</a></li><li><a href="/use-cases.html#writers" class="hover:text-gray-900">For Writers</a></li><li><a href="/teams.html" class="hover:text-gray-900">For Teams</a></li></ul></div>
+<div><h4 class="font-semibold text-gray-900 mb-4">Resources</h4><ul class="space-y-3 text-sm text-gray-600"><li><a href="/blog/index.html" class="hover:text-gray-900">Blog</a></li><li><a href="/blog/how-to-summarize-pdf.html" class="hover:text-gray-900">PDF Guide</a></li><li><a href="/blog/ai-writing-assistant-productivity.html" class="hover:text-gray-900">Writing Tips</a></li><li><a href="/blog/chat-with-documents.html" class="hover:text-gray-900">Chat Guide</a></li></ul></div>
+<div><h4 class="font-semibold text-gray-900 mb-4">Company</h4><ul class="space-y-3 text-sm text-gray-600"><li><a href="/about.html" class="hover:text-gray-900">About</a></li><li><a href="mailto:support@documentgpt.io" class="hover:text-gray-900">Contact</a></li><li><a href="mailto:support@documentgpt.io" class="hover:text-gray-900">Support</a></li></ul></div>
+<div><h4 class="font-semibold text-gray-900 mb-4">Legal</h4><ul class="space-y-3 text-sm text-gray-600"><li><a href="#" class="hover:text-gray-900">Privacy</a></li><li><a href="#" class="hover:text-gray-900">Terms</a></li></ul></div>
+</div>
+<div class="pt-8 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+<a href="/" class="flex items-center gap-2"><div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500"></div><span class="text-xl font-bold">DocumentGPT</span></a>
+<div class="text-sm text-gray-500">© 2024 DocumentGPT. All rights reserved.</div>
+</div>
+</div>
+</footer>
+</body>
+</html>

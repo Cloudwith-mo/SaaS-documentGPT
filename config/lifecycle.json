@@ -1,0 +1,20 @@
+{
+  "Rules": [
+    {
+      "ID": "DeleteOldUploads",
+      "Status": "Enabled",
+      "Prefix": "uploads/",
+      "Expiration": {
+        "Days": 7
+      }
+    },
+    {
+      "ID": "DeleteOldExports",
+      "Status": "Enabled",
+      "Prefix": "exports/",
+      "Expiration": {
+        "Days": 30
+      }
+    }
+  ]
+}

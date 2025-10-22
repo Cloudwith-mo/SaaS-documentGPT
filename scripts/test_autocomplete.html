@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autocomplete Test - DocumentGPT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .ghost-text{color:#9ca3af;opacity:0.5;pointer-events:none;user-select:none;}
+        .test-log{font-family:monospace;font-size:12px;background:#f3f4f6;padding:8px;border-radius:4px;margin-bottom:8px;}
+        .success{color:#10b981;font-weight:bold;}
+        .error{color:#ef4444;font-weight:bold;}
+        .info{color:#06b6d4;}
+    </style>
+</head>
+<body class="p-8 bg-gray-50">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6">🧪 Autocomplete Test Suite</h1>
+        
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Test Editor</h2>
+            <div id="testEditor" contenteditable="true" class="border-2 border-gray-300 rounded-lg p-4 min-h-[200px] focus:border-emerald-500 focus:outline-none">
+                Start typing here...
+            </div>
+            <div class="mt-4 flex gap-2">
+                <button onclick="runTest1()" class="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600">Test 1: Basic Flow</button>
+                <button onclick="runTest2()" class="px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600">Test 2: Tab Accept</button>
+                <button onclick="runTest3()" class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600">Test 3: Esc Dismiss</button>
+                <button onclick="runTest4()" class="px-4 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600">Test 4: Keep Typing</button>
+                <button onclick="clearEditor()" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">Clear</button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">Test Results</h2>
+            <div id="testLog" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <script>
+        const API = 'https://i1dy8i3692.execute-api.us-east-1.amazonaws.com/prod';
+        const testUserId = 'test_' + Math.random().toString(36).slice(2, 11);
+        
+        let autocompleteTimeout;
+        let ghostTextNode = null;
+        let lastAutocompleteText = '';
+        let autocompleteAcceptances = 0;
+        let testResults = [];
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-log ${type}`;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            document.getElementById('testLog').prepend(div);
+            console.log(message);
+        }
+
+        function clearEditor() {
+            document.getElementById('testEditor').innerHTML = '';
+            clearAutocomplete();
+            log('Editor cleared', 'info');
+        }
+
+        // Simulate typing with realistic delays
+        async function typeText(text, delayMs = 100) {
+            const editor = document.getElementById('testEditor');
+            for (let char of text) {
+                editor.textContent += char;
+                await sleep(delayMs);
+            }
+            log(`Typed: "${text}"`, 'info');
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // Autocomplete functions (same as main app)
+        async function triggerAutocomplete() {
+            const editor = document.getElementById('testEditor');
+            const text = editor.textContent.trim();
+            if (text.length < 20) {
+                log('Text too short for autocomplete', 'info');
+                return;
+            }
+            
+            const context = text.slice(-100);
+            log('Requesting autocomplete...', 'info');
+            
+            try {
+                const res = await fetch(`${API}/chat`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        user_id: testUserId,
+                        messages: [{
+                            role: 'user',
+                            content: `Continue this text with 5-10 words (respond with ONLY the continuation, no quotes): "${context}"`
+                        }]
+                    })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    const completion = data.response.replace(/^["']|["']$/g, '').trim();
+                    log(`✅ Got completion: "${completion}"`, 'success');
+                    showAutocomplete(completion);
+                } else {
+                    log(`❌ API error: ${res.status}`, 'error');
+                }
+            } catch (e) {
+                log(`❌ Autocomplete failed: ${e.message}`, 'error');
+            }
+        }
+
+        function showAutocomplete(text) {
+            clearAutocomplete();
+            
+            const editor = document.getElementById('testEditor');
+            ghostTextNode = document.createElement('span');
+            ghostTextNode.className = 'ghost-text';
+            ghostTextNode.textContent = text;
+            ghostTextNode.contentEditable = 'false';
+            
+            editor.appendChild(ghostTextNode);
+            lastAutocompleteText = text;
+            log(`👻 Ghost text shown: "${text}"`, 'success');
+        }
+
+        function acceptAutocomplete() {
+            if (!ghostTextNode) {
+                log('❌ No ghost text to accept', 'error');
+                return;
+            }
+            
+            const text = lastAutocompleteText;
+            const editor = document.getElementById('testEditor');
+            editor.removeChild(ghostTextNode);
+            editor.textContent += text;
+            
+            ghostTextNode = null;
+            lastAutocompleteText = '';
+            autocompleteAcceptances++;
+            
+            log(`✅ Accepted! Total acceptances: ${autocompleteAcceptances}`, 'success');
+        }
+
+        function clearAutocomplete() {
+            if (ghostTextNode && ghostTextNode.parentNode) {
+                ghostTextNode.parentNode.removeChild(ghostTextNode);
+                log('Ghost text cleared', 'info');
+            }
+            ghostTextNode = null;
+            lastAutocompleteText = '';
+        }
+
+        // Test Cases
+        async function runTest1() {
+            log('🧪 TEST 1: Basic Flow - Type, pause, see ghost text', 'info');
+            clearEditor();
+            await sleep(500);
+            
+            await typeText('The quick brown fox jumps over the lazy dog and continues running', 80);
+            log('Waiting 1.5s for autocomplete...', 'info');
+            await sleep(1500);
+            
+            await triggerAutocomplete();
+            await sleep(2000);
+            
+            if (ghostTextNode) {
+                log('✅ TEST 1 PASSED: Ghost text appeared', 'success');
+            } else {
+                log('❌ TEST 1 FAILED: No ghost text', 'error');
+            }
+        }
+
+        async function runTest2() {
+            log('🧪 TEST 2: Tab Accept - Accept ghost text with Tab', 'info');
+            clearEditor();
+            await sleep(500);
+            
+            await typeText('Artificial intelligence is transforming the way we work and live', 80);
+            await sleep(1500);
+            await triggerAutocomplete();
+            await sleep(2000);
+            
+            if (ghostTextNode) {
+                log('Ghost text present, simulating Tab press...', 'info');
+                acceptAutocomplete();
+                await sleep(500);
+                
+                if (!ghostTextNode && autocompleteAcceptances > 0) {
+                    log('✅ TEST 2 PASSED: Tab accepted ghost text', 'success');
+                } else {
+                    log('❌ TEST 2 FAILED: Tab did not accept', 'error');
+                }
+            } else {
+                log('❌ TEST 2 FAILED: No ghost text to accept', 'error');
+            }
+        }
+
+        async function runTest3() {
+            log('🧪 TEST 3: Esc Dismiss - Dismiss ghost text with Esc', 'info');
+            clearEditor();
+            await sleep(500);
+            
+            await typeText('Machine learning algorithms can predict patterns in data', 80);
+            await sleep(1500);
+            await triggerAutocomplete();
+            await sleep(2000);
+            
+            if (ghostTextNode) {
+                log('Ghost text present, simulating Esc press...', 'info');
+                clearAutocomplete();
+                await sleep(500);
+                
+                if (!ghostTextNode) {
+                    log('✅ TEST 3 PASSED: Esc dismissed ghost text', 'success');
+                } else {
+                    log('❌ TEST 3 FAILED: Ghost text still present', 'error');
+                }
+            } else {
+                log('❌ TEST 3 FAILED: No ghost text to dismiss', 'error');
+            }
+        }
+
+        async function runTest4() {
+            log('🧪 TEST 4: Keep Typing - Ghost text clears on new input', 'info');
+            clearEditor();
+            await sleep(500);
+            
+            await typeText('The future of technology is bright and full of possibilities', 80);
+            await sleep(1500);
+            await triggerAutocomplete();
+            await sleep(2000);
+            
+            if (ghostTextNode) {
+                log('Ghost text present, continuing to type...', 'info');
+                clearAutocomplete(); // Simulate what happens on input
+                await typeText(' and opportunities', 80);
+                await sleep(500);
+                
+                if (!ghostTextNode) {
+                    log('✅ TEST 4 PASSED: Ghost text cleared on new input', 'success');
+                } else {
+                    log('❌ TEST 4 FAILED: Ghost text still present', 'error');
+                }
+            } else {
+                log('❌ TEST 4 FAILED: No ghost text appeared', 'error');
+            }
+        }
+
+        // Manual keyboard event handlers
+        document.getElementById('testEditor').addEventListener('keydown', (e) => {
+            if (e.key === 'Tab' && ghostTextNode) {
+                e.preventDefault();
+                acceptAutocomplete();
+            }
+            if (e.key === 'Escape' && ghostTextNode) {
+                e.preventDefault();
+                clearAutocomplete();
+            }
+        });
+
+        document.getElementById('testEditor').addEventListener('input', () => {
+            clearAutocomplete();
+            clearTimeout(autocompleteTimeout);
+            autocompleteTimeout = setTimeout(() => {
+                triggerAutocomplete();
+            }, 1000);
+        });
+
+        log('✅ Test suite loaded. Click a test button to start.', 'success');
+    </script>
+</body>
+</html>

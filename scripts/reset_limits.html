@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reset Limits - DocumentGPT</title>
+    <style>
+        body { font-family: system-ui; max-width: 600px; margin: 50px auto; padding: 20px; }
+        button { background: #10b981; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #059669; }
+        .status { margin-top: 20px; padding: 15px; border-radius: 8px; }
+        .success { background: #d1fae5; color: #065f46; }
+        .info { background: #dbeafe; color: #1e40af; }
+    </style>
+</head>
+<body>
+    <h1>🔄 Reset Usage Limits</h1>
+    <p>Click the button below to reset your chat and document limits for testing.</p>
+    
+    <button onclick="resetLimits()">Reset Limits to 0</button>
+    
+    <div id="status"></div>
+    
+    <script>
+        function resetLimits() {
+            // Get current state
+            const state = JSON.parse(localStorage.getItem('dgpt:state:v3') || '{}');
+            
+            // Show current usage
+            const currentChats = state.usage?.chats_used || 0;
+            const currentDocs = state.docs?.length || 0;
+            
+            // Reset usage
+            if (state.usage) {
+                state.usage.chats_used = 0;
+                state.usage.documents_uploaded = 0;
+            }
+            
+            // Save back
+            localStorage.setItem('dgpt:state:v3', JSON.stringify(state));
+            
+            // Show status
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status success';
+            statusDiv.innerHTML = `
+                <h3>✅ Limits Reset!</h3>
+                <p><strong>Before:</strong></p>
+                <ul>
+                    <li>Chats used: ${currentChats}</li>
+                    <li>Documents: ${currentDocs}</li>
+                </ul>
+                <p><strong>After:</strong></p>
+                <ul>
+                    <li>Chats used: 0</li>
+                    <li>Documents: ${currentDocs} (unchanged)</li>
+                </ul>
+                <p>Refresh backup-lumina.html to see the changes!</p>
+            `;
+        }
+        
+        // Show current status on load
+        window.onload = () => {
+            const state = JSON.parse(localStorage.getItem('dgpt:state:v3') || '{}');
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status info';
+            statusDiv.innerHTML = `
+                <h3>📊 Current Usage</h3>
+                <ul>
+                    <li>Chats used: ${state.usage?.chats_used || 0} / 50</li>
+                    <li>Documents: ${state.docs?.length || 0} / 10</li>
+                </ul>
+            `;
+        };
+    </script>
+</body>
+</html>

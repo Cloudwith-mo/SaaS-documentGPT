@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocumentGPT - AI Document Summarizer & Writing Assistant | Free AI Research Tool</title>
+    <meta name="description" content="Free AI writing assistant and document analysis tool. Upload PDF and summarize instantly with smart highlights. Chat with your documents using AI. 50 free chats per month.">
+    <meta name="keywords" content="AI document summarizer, AI writing assistant, PDF to summary AI, chat with documents, free AI research assistant, AI note-taking tool, instant document highlights">
+    <meta property="og:title" content="DocumentGPT - AI Document Summarizer & Writing Assistant">
+    <meta property="og:description" content="Upload PDF and summarize with AI. Free AI writing tool with 50 chats per month. Smart highlights and contextual chat for documents.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://documentgpt.io">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="DocumentGPT - Free AI Document Summarizer">
+    <meta name="twitter:description" content="AI document analysis tool with instant highlights. Upload PDF and summarize free.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .font-inter { font-family: Inter, system-ui, sans-serif; }
+        :root { --accent: #10b981; --accent-2: #06b6d4; --ring: rgba(2,6,23,0.06); }
+        @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+        .animate-floaty { animation: floaty 7s ease-in-out infinite; }
+        .animate-floaty-2 { animation: floaty 6s ease-in-out infinite 0.2s; }
+        .animate-floaty-3 { animation: floaty 8s ease-in-out infinite; }
+    </style>
+</head>
+<body class="font-inter min-h-screen bg-white text-slate-900">
+    <!-- Header -->
+    <header class="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur">
+        <div class="mx-auto max-w-7xl px-4 md:px-6 lg:px-8">
+            <div class="h-16 flex items-center justify-between">
+                <a href="#top" class="inline-flex items-center gap-2">
+                    <div class="size-7 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500"></div>
+                    <span class="font-semibold tracking-tight">DocumentGPT</span>
+                </a>
+                <nav class="hidden md:flex items-center gap-6 text-sm">
+                    <a href="#modes" class="hover:text-slate-700">Modes</a>
+                    <a href="#agents" class="hover:text-slate-700">Agents</a>
+                    <a href="#pricing" class="hover:text-slate-700">Pricing</a>
+                    <a href="#faq" class="hover:text-slate-700">FAQ</a>
+                </nav>
+                <div class="flex items-center gap-3">
+                    <a href="/backup.html" class="inline-flex items-center rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-95">Open App</a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero with live preview -->
+    <section id="top" class="relative overflow-hidden">
+        <div class="absolute inset-0 -z-10 bg-[radial-gradient(60rem_60rem_at_20%_-10%,rgba(16,185,129,0.08),transparent),radial-gradient(60rem_60rem_at_80%_-10%,rgba(6,182,212,0.08),transparent)]"></div>
+        <div class="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 py-16 md:py-24">
+            <div class="max-w-3xl mx-auto text-center">
+                <!-- Copy -->
+                <div>
+                    <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
+                        <span class="size-1.5 rounded-full bg-emerald-500"></span> Research & journaling in one
+                    </div>
+                    <h1 class="mt-5 text-4xl md:text-5xl font-extrabold tracking-tight leading-[1.1]">
+                        <span class="text-transparent bg-clip-text bg-gradient-to-tr from-emerald-500 to-cyan-500">AI Document Summarizer</span> & Free AI Writing Assistant
+                    </h1>
+                    <p class="mt-4 text-lg text-slate-600 mx-auto max-w-2xl">
+                        Upload PDF and summarize instantly with AI. Chat with your documents using contextual AI. Free AI research assistant with 50 chats per month. Get instant document highlights and AI-powered analysis.
+                    </p>
+                    <div class="mt-8 flex flex-wrap justify-center items-center gap-3">
+                        <a href="/backup.html" class="inline-flex items-center rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 px-5 py-3 text-sm font-semibold text-white shadow hover:opacity-95">Try it free</a>
+                    </div>
+                    <div class="mt-6 flex flex-wrap justify-center gap-4 text-xs text-slate-500">
+                        <div class="inline-flex items-center gap-2"><span class="size-1.5 rounded-full bg-emerald-500"></span> ⚡ Instant Insights</div>
+                        <div class="inline-flex items-center gap-2"><span class="size-1.5 rounded-full bg-cyan-500"></span> 🎨 Smart Highlights</div>
+                        <div class="inline-flex items-center gap-2"><span class="size-1.5 rounded-full bg-indigo-500"></span> 📱 Mobile Ready</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Modes -->
+    <section id="modes" class="py-16 md:py-24 border-t border-slate-200/70">
+        <div class="mx-auto max-w-7xl px-4 md:px-6 lg:px-8">
+            <div class="max-w-2xl">
+                <h2 class="text-2xl md:text-3xl font-bold tracking-tight">Free AI Writing Tool & Document Summarizer</h2>
+                <p class="mt-2 text-slate-600">AI writing assistant for note-taking and AI document analysis tool for research. Upload PDF and summarize with contextual chat.</p>
+            </div>
+            <div class="mt-8 grid gap-6 md:grid-cols-2">
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-[var(--ring)]">
+                    <h3 class="font-semibold text-slate-900">✍️ AI Writing Assistant</h3>
+                    <p class="mt-2 text-sm text-slate-600">Free AI note-taking tool with smart formatting. AI writing assistant helps you write better, faster.</p>
+                    <ul class="mt-4 space-y-2 text-sm text-slate-600">
+                        <li>• AI-powered writing suggestions</li>
+                        <li>• Real-time document analysis</li>
+                        <li>• Quick AI actions (Shorter, Longer, Explain)</li>
+                        <li>• Free AI research assistant mode</li>
+                    </ul>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-[var(--ring)]">
+                    <h3 class="font-semibold text-slate-900">📄 AI Document Summarizer</h3>
+                    <p class="mt-2 text-sm text-slate-600">Upload PDF and summarize with AI. Instant document highlights and contextual chat for documents.</p>
+                    <ul class="mt-4 space-y-2 text-sm text-slate-600">
+                        <li>• PDF to summary AI (instant analysis)</li>
+                        <li>• Smart highlights on key phrases</li>
+                        <li>• Chat with your documents using AI</li>
+                        <li>• AI document analysis tool with insights</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Agents -->
+    <section id="agents" class="py-16 md:py-24 border-t border-slate-200/70">
+        <div class="mx-auto max-w-7xl px-4 md:px-6 lg:px-8">
+            <div class="max-w-2xl">
+                <h2 class="text-2xl md:text-3xl font-bold tracking-tight">AI Research Assistant Software with Smart Agents</h2>
+                <p class="mt-2 text-slate-600">Free AI research assistant with automated workflows. AI document analysis tool that exports, summarizes, and organizes.</p>
+            </div>
+            <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <div class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-[var(--ring)] hover:shadow-md transition">
+                    <div class="size-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 opacity-90 group-hover:opacity-100"></div>
+                    <h3 class="mt-4 font-semibold">Send email</h3>
+                    <p class="mt-2 text-sm text-slate-600">Ship a clean summary to your inbox or a teammate.</p>
+                </div>
+                <div class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-[var(--ring)] hover:shadow-md transition">
+                    <div class="size-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 opacity-90 group-hover:opacity-100"></div>
+                    <h3 class="mt-4 font-semibold">Update sheet</h3>
+                    <p class="mt-2 text-sm text-slate-600">Append findings to Google Sheets.</p>
+                </div>
+                <div class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-[var(--ring)] hover:shadow-md transition">
+                    <div class="size-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 opacity-90 group-hover:opacity-100"></div>
+                    <h3 class="mt-4 font-semibold">Create event</h3>
+                    <p class="mt-2 text-sm text-slate-600">Schedule follow‑ups from your doc context.</p>
+                </div>
+                <div class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-[var(--ring)] hover:shadow-md transition">
+                    <div class="size-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 opacity-90 group-hover:opacity-100"></div>
+                    <h3 class="mt-4 font-semibold">Export PDF/HTML</h3>
+                    <p class="mt-2 text-sm text-slate-600">Export to TXT, PDF, or HTML in one click.</p>
+                </div>
+                <div class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-[var(--ring)] hover:shadow-md transition">
+                    <div class="size-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 opacity-90 group-hover:opacity-100"></div>
+                    <h3 class="mt-4 font-semibold">Extract CSV</h3>
+                    <p class="mt-2 text-sm text-slate-600">Numbers out, ready for analysis.</p>
+                </div>
+                <div class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ring-1 ring-[var(--ring)] hover:shadow-md transition">
+                    <div class="size-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 opacity-90 group-hover:opacity-100"></div>
+                    <h3 class="mt-4 font-semibold">Voice tune</h3>
+                    <p class="mt-2 text-sm text-slate-600">Match brand tone on command.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section id="pricing" class="py-16 md:py-24 border-t border-slate-200/70">
+        <div class="mx-auto max-w-7xl px-4 md:px-6 lg:px-8">
+            <div class="max-w-2xl">
+                <h2 class="text-2xl md:text-3xl font-bold tracking-tight">Simple pricing</h2>
+                <p class="mt-3 text-slate-600">Start free. Upgrade when the work demands it.</p>
+            </div>
+            <div class="mt-10 grid gap-6 lg:grid-cols-3">
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="text-sm font-semibold text-emerald-700">Free</div>
+                    <div class="mt-2 text-3xl font-extrabold">$0</div>
+                    <p class="mt-2 text-sm text-slate-600">Perfect for trying it out</p>
+                    <ul class="mt-4 space-y-2 text-sm text-slate-600">
+                        <li>• 50 chats per month</li>
+                        <li>• 10 documents</li>
+                        <li>• All core features</li>
+                        <li>• Export to TXT/PDF/HTML</li>
+                    </ul>
+                    <a href="/backup.html" class="mt-6 inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-slate-50">Start free</a>
+                </div>
+
+                <div class="relative rounded-2xl border-2 border-emerald-500 bg-white p-6 shadow-md">
+                    <div class="absolute -top-3 right-4 rounded-full bg-emerald-500 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-white">Popular</div>
+                    <div class="text-sm font-semibold text-emerald-700">Pro</div>
+                    <div class="mt-2 text-3xl font-extrabold">$12<span class="text-base font-semibold text-slate-500">/mo</span></div>
+                    <p class="mt-2 text-sm text-slate-600">For power users</p>
+                    <ul class="mt-4 space-y-2 text-sm text-slate-600">
+                        <li>• Unlimited chats & documents</li>
+                        <li>• Cloud sync across devices</li>
+                        <li>• All 6 AI agents</li>
+                        <li>• Priority support</li>
+                    </ul>
+                    <a href="/backup.html" class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-95">Go Pro</a>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="text-sm font-semibold text-emerald-700">Team</div>
+                    <div class="mt-2 text-3xl font-extrabold">$25<span class="text-base font-semibold text-slate-500">/user</span></div>
+                    <p class="mt-2 text-sm text-slate-600">Shared workspaces & governance</p>
+                    <ul class="mt-4 space-y-2 text-sm text-slate-600">
+                        <li>• Team library & roles</li>
+                        <li>• Audit trails & export controls</li>
+                        <li>• Priority support</li>
+                    </ul>
+                    <a href="#contact" class="mt-6 inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-slate-50">Contact sales</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" class="py-16 md:py-24 border-t border-slate-200/70">
+        <div class="mx-auto max-w-4xl px-4 md:px-6 lg:px-8">
+            <h2 class="text-2xl md:text-3xl font-bold tracking-tight">FAQ</h2>
+            <div class="mt-8 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
+                <details class="group px-6 py-4">
+                    <summary class="flex cursor-pointer list-none items-center justify-between py-1 text-sm font-medium text-slate-900">
+                        <span>Does it work with long PDFs?</span>
+                        <span class="ml-4 rounded-md border border-slate-300 px-2 py-0.5 text-[10px] text-slate-600 group-open:hidden">Open</span>
+                        <span class="ml-4 hidden rounded-md border border-slate-300 px-2 py-0.5 text-[10px] text-slate-600 group-open:inline">Close</span>
+                    </summary>
+                    <p class="mt-2 text-sm text-slate-600">Yes. Ask focused questions, jump to relevant pages, and extract tables or figures as needed.</p>
+                </details>
+                <details class="group px-6 py-4">
+                    <summary class="flex cursor-pointer list-none items-center justify-between py-1 text-sm font-medium text-slate-900">
+                        <span>Can I use it for journaling?</span>
+                        <span class="ml-4 rounded-md border border-slate-300 px-2 py-0.5 text-[10px] text-slate-600 group-open:hidden">Open</span>
+                        <span class="ml-4 hidden rounded-md border border-slate-300 px-2 py-0.5 text-[10px] text-slate-600 group-open:inline">Close</span>
+                    </summary>
+                    <p class="mt-2 text-sm text-slate-600">Absolutely. Start a blank doc, write freely, and let live suggestions help with tone and structure.</p>
+                </details>
+                <details class="group px-6 py-4">
+                    <summary class="flex cursor-pointer list-none items-center justify-between py-1 text-sm font-medium text-slate-900">
+                        <span>What about privacy?</span>
+                        <span class="ml-4 rounded-md border border-slate-300 px-2 py-0.5 text-[10px] text-slate-600 group-open:hidden">Open</span>
+                        <span class="ml-4 hidden rounded-md border border-slate-300 px-2 py-0.5 text-[10px] text-slate-600 group-open:inline">Close</span>
+                    </summary>
+                    <p class="mt-2 text-sm text-slate-600">Files stay in your workspace. You choose what to export or share. Integrations require explicit approval.</p>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="contact" class="border-t border-slate-200/70 bg-white">
+        <div class="mx-auto max-w-7xl px-4 md:px-6 lg:px-8 py-10">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div class="flex items-center gap-3">
+                    <div class="size-7 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500"></div>
+                    <div>
+                        <p class="font-semibold">DocumentGPT</p>
+                        <p class="text-xs text-slate-500">Research & writing, rethought.</p>
+                    </div>
+                </div>
+                <div class="text-sm text-slate-600">
+                    <a href="mailto:support@documentgpt.io" class="underline underline-offset-2 decoration-slate-300 hover:decoration-slate-500">support@documentgpt.io</a>
+                    <span class="mx-3">•</span>
+                    <a href="/backup.html" class="hover:text-slate-800">Open app</a>
+                </div>
+            </div>
+            <div class="mt-6 text-xs text-slate-500">© 2024 DocumentGPT. All rights reserved.</div>
+        </div>
+    </footer>
+
+    <script>
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::documentgpt-raw-1757813720/*",
+        "arn:aws:s3:::documentgpt-raw-1757813720",
+        "arn:aws:s3:::documentgpt-processed-1757813720/*",
+        "arn:aws:s3:::documentgpt-processed-1757813720",
+        "arn:aws:s3:::documentgpt-website-prod/*",
+        "arn:aws:s3:::documentgpt-website-prod"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:UpdateItem",
+        "dynamodb:Query",
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:DeleteItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:us-east-1:995805900737:table/docgpt",
+        "arn:aws:dynamodb:us-east-1:995805900737:table/documentgpt-subscriptions",
+        "arn:aws:dynamodb:us-east-1:995805900737:table/documentgpt-usage"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:SendMessage",
+        "sqs:ReceiveMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:DeleteMessage"
+      ],
+      "Resource": "arn:aws:sqs:us-east-1:995805900737:docgpt-ingest"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": "arn:aws:secretsmanager:us-east-1:995805900737:secret:documentgpt/stripe-secret-*"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "userPoolId": "us-east-1_UcrfhrZOs",
+  "clientId": "1hpsk9ov5bf7i0vc30bld0757a",
+  "clientSecret": "17u85jk0ibf3p5d3k5hokhf1qg27kra6kke6vftuv7mqeeotusjd",
+  "region": "us-east-1",
+  "domain": "AWS default (no custom domain)",
+  "features": {
+    "emailVerification": true,
+    "socialLogins": false,
+    "attributes": ["email", "name", "subscription_tier"],
+    "passwordPolicy": "standard"
+  }
+}

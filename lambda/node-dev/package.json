@@ -1,0 +1,13 @@
+{
+  "name": "documentgpt-dev-lambda",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dev-handler.mjs",
+  "scripts": {
+    "test": "node test/smoke.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.659.0",
+    "@aws-sdk/lib-dynamodb": "^3.659.0"
+  }
+}

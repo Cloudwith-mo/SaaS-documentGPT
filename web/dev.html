@@ -116,6 +116,38 @@
             transition: box-shadow 0.2s ease;
         }
         
+        /* ChatPDF-style layout adjustments */
+        body.chatpdf-mode #leftSidebar {
+            display: none;
+        }
+        body.chatpdf-mode #leftSidebar.sidebar-open {
+            display: flex;
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            z-index: 30;
+            background: rgba(255, 255, 255, 0.95);
+        }
+        body.chatpdf-mode main {
+            max-width: calc(100% - 24rem);
+            margin: 0 auto;
+            overflow-y: auto;
+        }
+        body.chatpdf-mode #docControls,
+        body.chatpdf-mode #formatToolbar,
+        body.chatpdf-mode #docStatsBar {
+            display: none !important;
+        }
+        body.chatpdf-mode #editor {
+            padding: 2rem;
+            max-width: 48rem;
+            margin: 0 auto;
+        }
+        body.chatpdf-mode #rightSidebar {
+            width: 28rem;
+        }
+        
         /* Micro-animations for AI actions */
         @keyframes thinkwave {
             0% { background-position: 0% 50%; }
@@ -149,6 +181,16 @@
         /* Smooth momentum scroll */
         * {
             scroll-behavior: smooth;
+        }
+        
+        /* Chat smooth scrolling */
+        #chatMessages {
+            scroll-behavior: smooth;
+        }
+        
+        /* Prevent layout shift */
+        #chatMessages > div {
+            min-height: 40px;
         }
         
         /* Contextual tooltips */
@@ -403,6 +445,7 @@
         @keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:0.4}30%{transform:translateY(-10px);opacity:1}}
         .ai-thinking-text{font-size:12px;color:#10b981;font-weight:600;animation:fadeInOut 2s infinite}
         @keyframes fadeInOut{0%,100%{opacity:0.5}50%{opacity:1}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
         
         /* Transparent loading overlay */
         #loadingScreen {
@@ -577,8 +620,7 @@
                     <span class="text-2xl sidebar-icon">📄</span>
                     <span class="text-sm font-semibold text-emerald-600 sidebar-text">DocumentGPT</span>
                 </button>
-                <button id="toggleSidebarBtn" class="p-2 hover:bg-gray-100 rounded-lg sidebar-text" aria-label="Toggle sidebar">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button id="toggleSidebarBtn" class="p-2 hover:bg-gray-100 rounded-lg sidebar-text" aria-label="Toggle sidebar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                     </svg>
                 </button>
@@ -632,7 +674,7 @@
         </aside>
 
         <main class="flex-1 flex flex-col">
-            <div class="flex items-center gap-2 px-3 py-2 border-b" style="background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(6,182,212,0.08)); backdrop-filter: blur(20px); border-color: rgba(16,185,129,0.15);">
+            <div id="docControls" class="flex items-center gap-2 px-3 py-2 border-b" style="background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(6,182,212,0.08)); backdrop-filter: blur(20px); border-color: rgba(16,185,129,0.15);">
                 <div id="tabsContainer" class="flex items-center gap-1 overflow-x-auto flex-1"></div>
                 <button id="addTabBtn" class="text-xs px-2 py-1 rounded-full border hover:shadow-sm">+</button>
                 <div class="flex items-center gap-2 border rounded-xl px-2 py-1 text-xs">
@@ -685,7 +727,7 @@
                             <button id="toneBtn" class="px-3 py-1 text-xs hover:bg-emerald-50 rounded-lg border border-emerald-300 text-emerald-600 font-semibold" title="Adjust Tone">✨ Tone</button>
                         </div>
                         <div id="editor" contenteditable="true" class="flex-1 overflow-auto px-6 py-4 text-base leading-7 outline-none"></div>
-                        <div class="px-4 py-2 border-t flex gap-4 text-xs opacity-60" style="background: linear-gradient(135deg, rgba(16,185,129,0.03), rgba(6,182,212,0.03)); border-color: rgba(16,185,129,0.1);">
+                        <div id="docStatsBar" class="px-4 py-2 border-t flex gap-4 text-xs opacity-60" style="background: linear-gradient(135deg, rgba(16,185,129,0.03), rgba(6,182,212,0.03)); border-color: rgba(16,185,129,0.1);">
                             <span>Words: <b id="wordCount">0</b>/<b id="dailyGoal">500</b></span>
                             <span id="streakDisplay" class="cursor-pointer" onclick="showStreakModal()" title="Click for details">🔥 <b id="streakCount">0</b> day</span>
                             <span>DocIQ: <b id="docIQ" class="text-emerald-600">--</b> <span id="docIQBadge" class="text-xs"></span></span>
@@ -1031,8 +1073,13 @@ const userPool = new AmazonCognitoIdentity.CognitoUserPool(COGNITO);
 
 const CONFIG = {
     CHAT_LIMIT: 10,
-    DOC_LIMIT: 2
+    DOC_LIMIT: 2,
+    ENABLE_STREAMING: true
 };
+
+document.body.classList.add('chatpdf-mode');
+const textDecoder = new TextDecoder();
+let activeChatAbort = null;
 
 // Settings Store (MUST be defined before use)
 const SETTINGS_KEY = 'dgpt:settings:v1';
@@ -1125,9 +1172,11 @@ async function syncToCloud() {
                 headers,
                 body: JSON.stringify({
                     user_id: state.user.sub,
-                    doc_id: doc.id,
+                    doc_id: doc.backendId || doc.id,
                     name: doc.name,
                     content: doc.content,
+                    summary: doc.summary,
+                    questions: doc.questions,
                     isPdf: doc.isPdf || false,
                     chat_history: state.chatHistory[state.activeId] || []
                 })
@@ -1152,10 +1201,14 @@ async function loadCloudDocs() {
             if (data.documents && data.documents.length > 0) {
                 state.docs = data.documents.map(d => ({
                     id: d.doc_id,
+                    backendId: d.doc_id,
                     name: d.filename,
-                    content: d.content,
-                    isPdf: d.isPdf,
-                    updated_at: d.updated_at
+                    content: d.content || '',
+                    plainText: d.content || '',
+                    summary: d.summary || '',
+                    questions: d.questions || [],
+                    isPdf: d.isPdf || false,
+                    updated_at: d.created_at || d.updated_at
                 }));
                 
                 // Restore chat history
@@ -1187,6 +1240,12 @@ if (!state.versions) state.versions = {};
 if (!state.userHighlights) state.userHighlights = {};
 if (!state.folders) state.folders = [{id: 'default', name: 'All Documents', docs: []}];
 if (!state.activeFolder) state.activeFolder = 'default';
+state.docs = state.docs.map(doc => {
+    if (!doc.backendId && /^doc_\\d+$/.test(doc.id || '')) {
+        return {...doc, backendId: doc.id};
+    }
+    return {...doc, backendId: doc.backendId || null};
+});
 
 // Phase 4: Offline detection & error boundary
 window.addEventListener('online', () => {
@@ -1421,12 +1480,16 @@ function render() {
             chatContainer.innerHTML = '<div class="text-sm p-3 rounded-2xl border bg-emerald-50 text-gray-900">I\'m here to help you write better or analyze documents. Start typing or upload a file!</div>';
         } else {
             history.forEach(msg => {
-                const div = document.createElement('div');
-                div.className = msg.sender === 'user' 
-                    ? 'text-sm p-3 rounded-2xl border bg-blue-50 ml-8 text-gray-900'
-                    : 'text-sm p-3 rounded-2xl border bg-emerald-50 mr-8 text-gray-900';
-                div.innerHTML = msg.sender === 'bot' ? renderMarkdown(msg.text) : msg.text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                chatContainer.appendChild(div);
+                if (msg.artifact) {
+                    renderArtifacts(msg.artifact);
+                } else {
+                    const div = document.createElement('div');
+                    div.className = msg.sender === 'user' 
+                        ? 'text-sm p-3 rounded-2xl border bg-blue-50 ml-8 text-gray-900'
+                        : 'text-sm p-3 rounded-2xl border bg-emerald-50 mr-8 text-gray-900';
+                    div.innerHTML = msg.sender === 'bot' ? renderMarkdown(msg.text) : msg.text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    chatContainer.appendChild(div);
+                }
             });
         }
     }, 100);
@@ -1605,7 +1668,14 @@ function attachAllEvents() {
     on('uploadBtn', 'onclick', () => document.getElementById('fileInput').click());
     on('newBtn', 'onclick', createNewDoc);
     on('addTabBtn', 'onclick', createNewDoc);
-    on('toggleSidebarBtn', 'onclick', () => document.getElementById('leftSidebar').classList.toggle('collapsed'));
+    on('toggleSidebarBtn', 'onclick', () => {
+        const sidebar = document.getElementById('leftSidebar');
+        if (document.body.classList.contains('chatpdf-mode')) {
+            sidebar.classList.toggle('sidebar-open');
+        } else {
+            sidebar.classList.toggle('collapsed');
+        }
+    });
     on('logoBtn', 'onclick', () => {
         const sidebar = document.getElementById('leftSidebar');
         if (sidebar.classList.contains('collapsed')) {
@@ -1625,12 +1695,14 @@ function attachAllEvents() {
     // File upload
     on('fileInput', 'onchange', handleFileUpload);
     
-    // Chat
+    // Chat with debounce
     on('sendBtn', 'onclick', sendChat);
+    let chatDebounce;
     on('chatInput', 'onkeydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            sendChat();
+            clearTimeout(chatDebounce);
+            chatDebounce = setTimeout(() => sendChat(), 200);
         }
         // Shift+Enter creates newline (default behavior, don't prevent)
     });
@@ -1831,7 +1903,7 @@ function createNewDoc() {
         toast(`Document limit reached! (${state.limits.documents} max)`);
         return;
     }
-    const doc = {id: 'doc' + Date.now(), name: 'Untitled ' + (state.docs.length + 1), content: '', folder: state.activeFolder};
+    const doc = {id: 'doc' + Date.now(), backendId: null, name: 'Untitled ' + (state.docs.length + 1), content: '', folder: state.activeFolder};
     state.docs.push(doc);
     state.activeId = doc.id;
     saveState();
@@ -1881,17 +1953,18 @@ async function handleFileUpload(e) {
     // Show transparent loading overlay
     const loadingScreen = document.getElementById('loadingScreen');
     const loadingText = document.getElementById('loadingText');
-    loadingText.textContent = 'Analyzing your document...';
+    loadingText.textContent = '📄 Uploading document...';
     loadingScreen.style.display = 'flex';
     
-    showProgress(20);
+    showProgress(10);
     
     try {
         let content = '';
         
         if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+            loadingText.textContent = '🔍 Extracting text...';
             const arrayBuffer = await file.arrayBuffer();
-            showProgress(40);
+            showProgress(30);
             const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
             const pages = [];
             for (let i = 1; i <= pdf.numPages; i++) {
@@ -1899,7 +1972,7 @@ async function handleFileUpload(e) {
                 const textContent = await page.getTextContent();
                 const pageText = textContent.items.map(item => item.str).join(' ');
                 pages.push(pageText);
-                showProgress(40 + (i / pdf.numPages) * 30);
+                showProgress(30 + (i / pdf.numPages) * 30);
             }
             content = pages.join('\n\n');
         } else {
@@ -1907,7 +1980,8 @@ async function handleFileUpload(e) {
             showProgress(50);
         }
         
-        showProgress(70);
+        loadingText.textContent = '🧠 Creating embeddings...';
+        showProgress(65);
         const headers = {'Content-Type': 'application/json'};
         if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
         const processRes = await fetch(`${API}/dev/upload`, {
@@ -1916,11 +1990,12 @@ async function handleFileUpload(e) {
             body: JSON.stringify({
                 user_id: state.user.sub,
                 filename: file.name,
-                content: content,
+                content: content.substring(0, 50000),
                 generate_summary: true
             })
         });
-        showProgress(90);
+        loadingText.textContent = '💾 Indexing document...';
+        showProgress(85);
         
         if (!processRes.ok) {
             const err = await processRes.json();
@@ -1943,11 +2018,16 @@ async function handleFileUpload(e) {
         ).join('');
         
         // Create new document with uploaded content
+        const backendDocId = result.doc_id || ('doc' + Date.now());
         const newDoc = {
-            id: 'doc' + Date.now(),
+            id: backendDocId,
+            backendId: backendDocId,
             name: file.name.replace(/\.[^/.]+$/, ''),
             content: pagesHtml,
-            isPdf: file.type === 'application/pdf' || file.name.endsWith('.pdf')
+            plainText: content,
+            isPdf: file.type === 'application/pdf' || file.name.endsWith('.pdf'),
+            summary: result.artifact?.summary || '',
+            questions: result.artifact?.questions || []
         };
         state.docs.push(newDoc);
         state.activeId = newDoc.id;
@@ -1956,13 +2036,8 @@ async function handleFileUpload(e) {
         loadingScreen.style.display = 'none';
         addChatMessage(`✅ Uploaded ${file.name}`, 'bot');
         
-        if (result.summary) {
-            addChatMessage(result.summary, 'bot');
-        }
-        
-        if (result.questions && result.questions.length > 0) {
-            const questionsText = result.questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
-            addChatMessage(`💡 Try asking:\n${questionsText}`, 'bot');
+        if (result.artifact) {
+            renderArtifacts(result.artifact);
         }
         
         posthog && posthog.capture('upload_doc', {file_type: file.type});
@@ -1971,7 +2046,7 @@ async function handleFileUpload(e) {
         if (result.insights) showInsights(result.insights);
         
         await loadUsage();
-        render();
+        // Don't call render() - it wipes the chat including summary/questions
         
         // Apply smart highlights after render
         if (result.highlights) {
@@ -1990,10 +2065,24 @@ async function handleFileUpload(e) {
 }
 
 // Phase 4: Optimistic UI & retry
+let isSubmitting = false;
+
 async function sendChat() {
+    if (isSubmitting) return;
+    
     const input = document.getElementById('chatInput');
     const msg = input.value.trim();
     if (!msg) return;
+    
+    if (activeChatAbort) {
+        activeChatAbort.abort();
+        activeChatAbort = null;
+    }
+    
+    isSubmitting = true;
+    const sendBtn = document.getElementById('sendBtn');
+    sendBtn.disabled = true;
+    sendBtn.style.opacity = '0.5';
     
     // Check if user is at free tier limit (skip if tier not loaded yet)
     const isPremium = state.user?.tier && ['premium', 'pro', 'business', 'Premium', 'Pro', 'Business'].includes(state.user.tier);
@@ -2039,7 +2128,7 @@ async function sendChat() {
     
     // Optimistic update
     state.usage.chats_used++;
-    render();
+    // Don't render - it wipes chat
     
     // Show interactive loading indicator
     const loadingDiv = document.createElement('div');
@@ -2054,24 +2143,121 @@ async function sendChat() {
         const headers = {'Content-Type': 'application/json'};
         if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
         
-        // Get active document content
-        const doc = state.docs.find(d => d.id === state.activeId);
-        const docContent = doc?.content || document.getElementById('editor')?.textContent || '';
+        // Try streaming first
+        const useStreaming = CONFIG.ENABLE_STREAMING;
         
-        // Build message with context if document exists
-        let messageContent = msg;
-        if (docContent && docContent.length > 50) {
-            messageContent = `Document context:\n${docContent.slice(0, 120000)}\n\nUser question: ${msg}`;
+        if (useStreaming) {
+            const doc = state.docs.find(d => d.id === state.activeId);
+            const backendId = doc?.backendId || doc?.id;
+            const controller = new AbortController();
+            activeChatAbort = controller;
+            let res;
+            try {
+                res = await fetch(`${API}/dev/chat`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({query: msg, stream: true, doc_id: backendId}),
+                    signal: controller.signal
+                });
+            } catch (err) {
+                if (controller.signal.aborted) {
+                    return;
+                }
+                console.error('Streaming fetch failed', err);
+            }
+            
+            if (res && res.ok && res.headers.get('content-type')?.includes('text/event-stream')) {
+                loadingDiv.remove();
+                const streamDiv = document.createElement('div');
+                streamDiv.className = 'text-sm p-3 rounded-2xl border bg-emerald-50 mr-8 text-gray-900';
+                document.getElementById('chatMessages').appendChild(streamDiv);
+                
+                let fullText = '';
+                let citations = [];
+                let rafId = null;
+                const reader = res.body.getReader();
+                
+                const flush = () => {
+                    streamDiv.innerHTML = renderMarkdown(fullText);
+                    streamDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
+                };
+                
+                const scheduleFlush = () => {
+                    if (rafId) return;
+                    rafId = requestAnimationFrame(() => {
+                        rafId = null;
+                        flush();
+                    });
+                };
+                
+                reading: while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = textDecoder.decode(value, {stream: true});
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        if (line === 'data: [DONE]') break reading;
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.event === 'metadata' && data.citations) {
+                                citations = data.citations;
+                                continue;
+                            }
+                            if (data.error) {
+                                fullText = data.error;
+                                scheduleFlush();
+                                continue;
+                            }
+                            if (data.token) {
+                                fullText += data.token;
+                                scheduleFlush();
+                            }
+                            if (data.citations) citations = data.citations;
+                        } catch (e) {
+                            continue;
+                        }
+                    }
+                }
+                
+                if (rafId) {
+                    cancelAnimationFrame(rafId);
+                    flush();
+                } else {
+                    flush();
+                }
+                
+                isSubmitting = false;
+                sendBtn.disabled = false;
+                sendBtn.style.opacity = '1';
+                activeChatAbort = null;
+                
+                if (!state.chatHistory[state.activeId]) state.chatHistory[state.activeId] = [];
+                state.chatHistory[state.activeId].push({text: fullText, sender: 'bot', citations});
+                saveState();
+                return;
+            } else if (controller.signal.aborted) {
+                return;
+            }
         }
         
+        // Fallback to non-streaming
+        const doc = state.docs.find(d => d.id === state.activeId);
+        const backendId = doc?.backendId || doc?.id;
         const res = await fetch(`${API}/dev/chat`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({user_id: state.user.sub, messages: [{role: 'user', content: messageContent}]})
+            body: JSON.stringify({query: msg, doc_id: backendId})
         });
         
         const data = await res.json();
         loadingDiv.remove();
+        isSubmitting = false;
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = '1';
+        activeChatAbort = null;
         if (res.ok) {
             const response = data.response;
             const citations = data.citations || [];
@@ -2117,11 +2303,16 @@ async function sendChat() {
                     await addChatMessageStreaming(response, 'bot');
                 }
             } else {
-                await addChatMessageWithCitations(response, citations, 'bot');
+                // Use citation rendering if citations exist
+                if (citations && citations.length > 0) {
+                    renderAnswerWithCitations(data);
+                } else {
+                    await addChatMessageWithCitations(response, citations, 'bot');
+                }
             }
             
             await loadUsage();
-            render();
+            // Don't render - it wipes chat
             gtag && gtag('event', 'chat_sent');
         } else {
             state.usage.chats_used--; // Rollback optimistic update
@@ -2130,11 +2321,14 @@ async function sendChat() {
             } else {
                 addChatMessage(`Error: ${data.error}`, 'bot');
             }
-            render();
+            // Don't render - it wipes chat
         }
     } catch (e) {
         state.usage.chats_used--; // Rollback optimistic update
         loadingDiv.remove();
+        isSubmitting = false;
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = '1';
         const retryBtn = document.createElement('button');
         retryBtn.textContent = '🔄 Retry';
         retryBtn.className = 'text-xs px-2 py-1 rounded border border-emerald-500 text-emerald-500 hover:bg-emerald-50 ml-2';
@@ -2144,7 +2338,7 @@ async function sendChat() {
         errDiv.innerHTML = `<span>❌ ${e.message}</span>`;
         errDiv.appendChild(retryBtn);
         document.getElementById('chatMessages').appendChild(errDiv);
-        render();
+        // Don't render - it wipes chat
     }
 }
 
@@ -3892,6 +4086,102 @@ window.regenerateMindMap = () => {
     toast('🔄 Mind map regenerated with smart clustering', true);
 };
 
+// === CHATPDF UX ENHANCEMENTS ===
+
+function renderArtifacts(artifact) {
+    if (!artifact) return;
+    const activeDoc = state.docs.find(d => d.id === state.activeId);
+    if (activeDoc) {
+        if (artifact.doc_id && !activeDoc.backendId) activeDoc.backendId = artifact.doc_id;
+        activeDoc.summary = artifact.summary || activeDoc.summary || '';
+        activeDoc.questions = artifact.questions || [];
+        saveState();
+    }
+    if (!artifact || !artifact.summary) return;
+    
+    // Save to chat history for persistence
+    if (!state.chatHistory[state.activeId]) state.chatHistory[state.activeId] = [];
+    state.chatHistory[state.activeId].push({
+        text: artifact.summary,
+        sender: 'bot',
+        artifact: artifact
+    });
+    saveState();
+    
+    const chatMessages = document.getElementById('chatMessages');
+    const box = document.createElement('div');
+    box.className = 'text-sm p-3 rounded-2xl border bg-emerald-50 mr-8 text-gray-900';
+    
+    const summaryDiv = document.createElement('div');
+    summaryDiv.className = 'font-bold text-emerald-700 mb-2';
+    summaryDiv.textContent = '📄 Document Summary';
+    box.appendChild(summaryDiv);
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'mb-3';
+    contentDiv.textContent = artifact.summary;
+    box.appendChild(contentDiv);
+    
+    if (artifact.questions && artifact.questions.length > 0) {
+        const qHeader = document.createElement('div');
+        qHeader.className = 'font-bold text-cyan-700 mb-2';
+        qHeader.textContent = '💡 Suggested Questions';
+        box.appendChild(qHeader);
+        
+        const qContainer = document.createElement('div');
+        qContainer.className = 'space-y-2';
+        
+        artifact.questions.forEach(q => {
+            const btn = document.createElement('button');
+            btn.className = 'qcard w-full text-left px-3 py-2 rounded-lg border border-cyan-300 bg-white hover:bg-cyan-50 hover:border-cyan-500 transition-all text-sm';
+            btn.textContent = q;
+            btn.onclick = () => {
+                document.getElementById('chatInput').value = q;
+                sendChat();
+            };
+            qContainer.appendChild(btn);
+        });
+        
+        box.appendChild(qContainer);
+    }
+    
+    chatMessages.appendChild(box);
+    box.scrollIntoView({ behavior: 'smooth' });
+}
+
+function renderAnswerWithCitations(data) {
+    const chatMessages = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'text-sm p-3 rounded-2xl border bg-emerald-50 mr-8 text-gray-900';
+    let html = (data.response || data.answer || '').replace(/\[(\d+)\]/g, (_, n) => 
+        `<sup class="cit cursor-pointer text-blue-600 hover:text-blue-800 font-bold underline" data-cit="${n}" onclick="jumpToCitation(${n}, ${JSON.stringify(data.citations || []).replace(/"/g, '&quot;')})">[${n}]</sup>`
+    );
+    if (data.citations && data.citations.length > 0) {
+        html += `<div class="mt-3 pt-3 border-t border-emerald-200">
+            <div class="text-xs font-bold text-gray-600 mb-2">📚 Sources:</div>
+            <ol class="text-xs space-y-1">
+                ${data.citations.map(s => `
+                    <li class="text-gray-700">
+                        <span class="font-bold text-blue-600">[${s.n}]</span> 
+                        ${escapeHtml(s.docName || 'Document')}${s.page ? `, p.${s.page}` : ''} 
+                        ${s.text ? `— <em class="text-gray-600">${escapeHtml(s.text.substring(0, 100))}...</em>` : ''}
+                    </li>
+                `).join('')}
+            </ol>
+        </div>`;
+    }
+    div.innerHTML = html;
+    chatMessages.appendChild(div);
+    // Citations are now clickable inline
+    div.scrollIntoView({ behavior: 'smooth' });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 window.exportMindMap = () => {
     const canvas = document.getElementById('mindMapCanvas');
     const nodes = Array.from(canvas.children);
@@ -4032,11 +4322,44 @@ window.scrollToPage = (pageIdx) => {
     const pages = document.getElementById('editor').querySelectorAll('div[style*="page-break-after"]');
     if (pages[pageIdx]) {
         pages[pageIdx].scrollIntoView({behavior: 'smooth', block: 'start'});
-        // Update active thumbnail
         document.querySelectorAll('.pdf-thumb').forEach((thumb, idx) => {
             thumb.classList.toggle('active', idx === pageIdx);
         });
     }
+};
+
+window.jumpToCitation = (citationNum, citations) => {
+    const citation = citations.find(c => c.n === citationNum);
+    if (!citation) return;
+    
+    const page = citation.page || 1;
+    const text = citation.text || '';
+    
+    // Scroll to page
+    scrollToPage(page - 1);
+    
+    // Highlight text in editor
+    setTimeout(() => {
+        const editor = document.getElementById('editor');
+        const content = editor.innerHTML;
+        
+        // Remove old highlights
+        const cleaned = content.replace(/<mark class="citation-highlight"[^>]*>(.*?)<\/mark>/gi, '$1');
+        
+        // Add new highlight
+        if (text.length > 20) {
+            const searchText = text.substring(0, 100).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const highlighted = cleaned.replace(new RegExp(`(${searchText})`, 'i'), 
+                '<mark class="citation-highlight" style="background: linear-gradient(120deg, #fef3c7 0%, #fde68a 100%); padding: 2px 4px; border-radius: 3px; animation: pulse 1s ease-in-out 3;">$1</mark>');
+            editor.innerHTML = highlighted;
+            
+            // Scroll to highlight
+            const mark = editor.querySelector('.citation-highlight');
+            if (mark) mark.scrollIntoView({behavior: 'smooth', block: 'center'});
+        }
+        
+        toast(`📍 Jumped to page ${page}`, true);
+    }, 300);
 };
 
 // Phase 4: Undo delete with 5s window

@@ -9,8 +9,8 @@ from typing import Any, Dict, List
 from uuid import uuid4
 
 import boto3
+import requests
 from botocore.exceptions import ClientError
-from pinecone import Pinecone
 
 from config import get_settings
 from embeddings import NovaEmbeddingClient, NovaEmbeddingRequest
@@ -19,6 +19,7 @@ settings = get_settings()
 
 DOC_TABLE_NAME = settings.doc_table
 PINECONE_API_KEY = settings.pinecone_api_key
+PINECONE_INDEX_HOST = settings.pinecone_index_host
 PINECONE_INDEX_NAME = settings.pinecone_index or "documentgpt-dev"
 BEDROCK_REGION = settings.bedrock_region or "us-east-1"
 NOVA_MODEL_ID = settings.nova_embedding_model or "amazon.nova-embed-v1"
@@ -28,14 +29,41 @@ s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 docs_table = dynamodb.Table(DOC_TABLE_NAME)
 
-pinecone_client = Pinecone(api_key=PINECONE_API_KEY)
-pinecone_index = pinecone_client.Index(PINECONE_INDEX_NAME)
-
 nova_client = NovaEmbeddingClient(
     region=BEDROCK_REGION,
     model_id=NOVA_MODEL_ID,
     role_arn=NOVA_ACCESS_ROLE_ARN,
 )
+
+
+def pinecone_request(path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not PINECONE_INDEX_HOST:
+        raise RuntimeError("PINECONE_INDEX_HOST not configured for media worker")
+
+    url = f"https://{PINECONE_INDEX_HOST}{path}"
+    headers = {
+        "Content-Type": "application/json",
+        "Api-Key": PINECONE_API_KEY,
+    }
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+    except requests.RequestException as request_error:
+        raise RuntimeError(f"Pinecone request failed: {request_error}") from request_error
+
+    if not response.ok:
+        raise RuntimeError(
+            f"Pinecone request failed ({response.status_code}): {response.text[:300]}"
+        )
+    return response.json()
+
+
+def pinecone_upsert(vectors: List[Dict[str, Any]]) -> None:
+    if not vectors:
+        return
+
+    batch_size = 100
+    for i in range(0, len(vectors), batch_size):
+        pinecone_request("/vectors/upsert", {"vectors": vectors[i : i + batch_size]})
 
 
 def lambda_handler(event, context):
@@ -103,7 +131,7 @@ def _process_job(job: Dict[str, Any]) -> None:
             }
         )
 
-    pinecone_index.upsert(vectors=upserts)
+    pinecone_upsert(upserts)
     print(f"📌 Upserted {len(upserts)} embeddings for {doc_id}")
 
     docs_table.update_item(

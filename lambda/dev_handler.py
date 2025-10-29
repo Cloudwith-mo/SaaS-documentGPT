@@ -12,12 +12,11 @@ from typing import Optional
 
 import boto3
 
+import requests
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_pinecone import PineconeVectorStore
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.tools import Tool
 from langchain_core.messages import HumanMessage, SystemMessage
-from pinecone import Pinecone
 
 from agents import DEFAULT_RESEARCH_SYSTEM_PROMPT, build_langgraph_agent, web_search
 from config import get_settings, make_cors_headers
@@ -27,6 +26,7 @@ settings = get_settings()
 OPENAI_API_KEY = settings.openai_api_key
 PINECONE_API_KEY = settings.pinecone_api_key
 PINECONE_INDEX_NAME = settings.pinecone_index or 'documentgpt-dev'
+PINECONE_INDEX_HOST = settings.pinecone_index_host
 DOC_TABLE = settings.doc_table
 MEDIA_BUCKET = settings.media_bucket
 MEDIA_QUEUE_URL = settings.media_queue_url
@@ -49,21 +49,48 @@ sqs = boto3.client('sqs')
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1, openai_api_key=OPENAI_API_KEY)
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=OPENAI_API_KEY)
 
-# Pinecone - lazy init
-vector_store = None
+# Pinecone REST helpers
+def pinecone_request(path, payload):
+    if not PINECONE_INDEX_HOST:
+        raise RuntimeError("PINECONE_INDEX_HOST not configured")
 
-def get_vector_store():
-    global vector_store
-    if vector_store is None:
-        try:
-            pc = Pinecone(api_key=PINECONE_API_KEY)
-            index = pc.Index(PINECONE_INDEX_NAME, pool_threads=1)
-            vector_store = PineconeVectorStore(index=index, embedding=embeddings, text_key="text")
-        except Exception as init_error:
-            print(f"❌ Pinecone init error: {init_error!r}")
-            traceback.print_exc()
-            raise
-    return vector_store
+    url = f"https://{PINECONE_INDEX_HOST}{path}"
+    headers = {
+        "Content-Type": "application/json",
+        "Api-Key": PINECONE_API_KEY,
+    }
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+    except requests.RequestException as request_error:
+        raise RuntimeError(f"Pinecone request failed: {request_error}") from request_error
+
+    if not response.ok:
+        raise RuntimeError(
+            f"Pinecone request failed ({response.status_code}): {response.text[:300]}"
+        )
+    return response.json()
+
+
+def pinecone_upsert(vectors):
+    if not vectors:
+        return
+
+    batch_size = 100
+    for i in range(0, len(vectors), batch_size):
+        batch = {"vectors": vectors[i : i + batch_size]}
+        pinecone_request("/vectors/upsert", batch)
+
+
+def pinecone_query(vector, doc_id=None, top_k=5):
+    body = {
+        "vector": vector,
+        "topK": top_k,
+        "includeMetadata": True,
+    }
+    if doc_id:
+        body["filter"] = {"doc_id": {"$eq": doc_id}}
+    data = pinecone_request("/query", body)
+    return data.get("matches", [])
 
 # Text splitter
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
@@ -86,17 +113,28 @@ def make_headers(content_type='application/json', request_headers=None):
 def pinecone_retrieve(query: str, doc_id: str = None) -> str:
     """Retrieve relevant document chunks from Pinecone vector database"""
     try:
-        vs = get_vector_store()
-        filter_dict = {"doc_id": doc_id} if doc_id else None
-        results = vs.similarity_search(query, k=5, filter=filter_dict)
-        
+        query_embedding = embeddings.embed_query(query)
+        results = pinecone_query(query_embedding, doc_id=doc_id, top_k=5)
+
         if not results:
             return "No relevant passages found in documents."
-        
-        context = "\n\n".join([f"[{i+1}] {doc.page_content}" for i, doc in enumerate(results)])
+
+        passages = []
+        for idx, match in enumerate(results):
+            metadata = match.get("metadata") or {}
+            text = metadata.get("text") or ""
+            if not text:
+                continue
+            passages.append(f"[{idx + 1}] {text}")
+
+        if not passages:
+            return "No relevant passages found in documents."
+
+        context = "\n\n".join(passages)
         return f"RELEVANT PASSAGES:\n{context}"
     except Exception as e:
         print(f"⚠️ Pinecone retrieve error: {e}")
+        traceback.print_exc()
         return "Error retrieving from vector database."
 
 # Define tools (mutable list so we can swap document filter per-request)
@@ -287,13 +325,33 @@ def lambda_handler(event, context):
             chunks = text_splitter.split_text(content)
             print(f"✂️  Split into {len(chunks)} chunks")
 
-            metadatas = [{"doc_id": doc_id, "doc_name": filename, "chunk": i} for i in range(len(chunks))]
-
-            print("🔧 Preparing Pinecone vector store", flush=True)
-            vs = get_vector_store()
-            print("🔧 Pinecone vector store ready, embedding chunks", flush=True)
+            print("🔧 Preparing Pinecone payload", flush=True)
             try:
-                vs.add_texts(texts=chunks, metadatas=metadatas)
+                embeddings_list = embeddings.embed_documents(chunks)
+            except Exception as embed_error:
+                print(f"❌ Embedding error: {embed_error!r}")
+                traceback.print_exc()
+                raise
+
+            print("📌 Upserting embeddings to Pinecone", flush=True)
+            vectors = []
+            for idx, (chunk, vector) in enumerate(zip(chunks, embeddings_list)):
+                vectors.append(
+                    {
+                        "id": f"{doc_id}-{idx}",
+                        "values": vector,
+                        "metadata": {
+                            "doc_id": doc_id,
+                            "doc_name": filename,
+                            "chunk": idx,
+                            "text": chunk,
+                            "user_id": user_id,
+                        },
+                    }
+                )
+
+            try:
+                pinecone_upsert(vectors)
             except Exception as pinecone_error:
                 print(f"❌ Pinecone upsert error: {pinecone_error!r}")
                 traceback.print_exc()

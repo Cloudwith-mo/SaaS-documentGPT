@@ -1,41 +1,48 @@
 """
 DocumentGPT Dev Handler - LangGraph Orchestration + MCP-style Tooling
 """
-import os
+import base64
 import json
-import boto3
+import mimetypes
+import os
+import traceback
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, List, Optional, TypedDict
-import operator
+from typing import Optional
+
+import boto3
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.tools import Tool
 from pinecone import Pinecone
-from duckduckgo_search import DDGS
 
-from langchain_core.messages import (
-    AIMessage,
-    BaseMessage,
-    HumanMessage,
-    SystemMessage,
-    ToolMessage,
-)
-from langgraph.graph import StateGraph
-from langgraph.prebuilt import ToolNode, tools_condition
+from agents import DEFAULT_RESEARCH_SYSTEM_PROMPT, build_langgraph_agent, web_search
+from config import get_settings, make_cors_headers
 
 # Environment
-OPENAI_API_KEY = os.environ['OPENAI_API_KEY']
-PINECONE_API_KEY = os.environ['PINECONE_API_KEY']
-PINECONE_INDEX_NAME = os.environ.get('PINECONE_INDEX', 'documentgpt-dev')
-ALLOWED_ORIGINS = [o.strip() for o in os.environ.get('ALLOWED_ORIGINS', 'https://documentgpt.io').split(',')]
-DEFAULT_ORIGIN = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else '*'
+settings = get_settings()
+OPENAI_API_KEY = settings.openai_api_key
+PINECONE_API_KEY = settings.pinecone_api_key
+PINECONE_INDEX_NAME = settings.pinecone_index or 'documentgpt-dev'
+DOC_TABLE = settings.doc_table
+MEDIA_BUCKET = settings.media_bucket
+MEDIA_QUEUE_URL = settings.media_queue_url
+
+# Ensure Pinecone cache can write inside Lambda /tmp filesystem
+os.environ["HOME"] = "/tmp"
+os.environ["PINECONE_CACHE_DIR"] = "/tmp/pinecone"
+os.environ["XDG_CACHE_HOME"] = "/tmp/.cache"
+os.environ["XDG_CONFIG_HOME"] = "/tmp/.config"
+os.makedirs("/tmp/.cache", exist_ok=True)
+os.makedirs("/tmp/.config", exist_ok=True)
+os.makedirs(os.environ["PINECONE_CACHE_DIR"], exist_ok=True)
 
 # AWS clients
 dynamodb = boto3.resource('dynamodb')
 s3 = boto3.client('s3')
+sqs = boto3.client('sqs')
 
 # LangChain setup
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1, openai_api_key=OPENAI_API_KEY)
@@ -47,9 +54,14 @@ vector_store = None
 def get_vector_store():
     global vector_store
     if vector_store is None:
-        pc = Pinecone(api_key=PINECONE_API_KEY)
-        index = pc.Index(PINECONE_INDEX_NAME)
-        vector_store = PineconeVectorStore(index=index, embedding=embeddings, text_key="text")
+        try:
+            pc = Pinecone(api_key=PINECONE_API_KEY)
+            index = pc.Index(PINECONE_INDEX_NAME)
+            vector_store = PineconeVectorStore(index=index, embedding=embeddings, text_key="text")
+        except Exception as init_error:
+            print(f"❌ Pinecone init error: {init_error!r}")
+            traceback.print_exc()
+            raise
     return vector_store
 
 # Text splitter
@@ -62,16 +74,12 @@ class DecimalEncoder(json.JSONEncoder):
         return super().default(obj)
 
 def make_headers(content_type='application/json', request_headers=None):
-    req_headers = request_headers or {}
-    request_origin = req_headers.get('origin') or req_headers.get('Origin')
-    cors_origin = request_origin if request_origin in ALLOWED_ORIGINS else DEFAULT_ORIGIN
-    return {
-        'Content-Type': content_type,
-        'Access-Control-Allow-Origin': cors_origin,
-        'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-        'Access-Control-Allow-Credentials': 'true' if cors_origin != '*' else 'false'
-    }
+    return make_cors_headers(
+        settings,
+        request_headers=request_headers,
+        content_type=content_type,
+        add_origin_header=True,
+    )
 
 # MCP-style Tools
 def pinecone_retrieve(query: str, doc_id: str = None) -> str:
@@ -90,19 +98,6 @@ def pinecone_retrieve(query: str, doc_id: str = None) -> str:
         print(f"⚠️ Pinecone retrieve error: {e}")
         return "Error retrieving from vector database."
 
-def web_search(query: str) -> str:
-    """Search the web for supplemental information"""
-    try:
-        results = DDGS().text(query, max_results=3)
-        if not results:
-            return "No web results found."
-        
-        snippets = [f"• {r['title']}: {r['body'][:200]}... (source: {r['href']})" for r in results]
-        return "WEB RESULTS:\n" + "\n".join(snippets)
-    except Exception as e:
-        print(f"⚠️ Web search error: {e}")
-        return "Web search unavailable."
-
 # Define tools (mutable list so we can swap document filter per-request)
 tools = [
     Tool(
@@ -117,69 +112,9 @@ tools = [
     ),
 ]
 
+RESEARCH_SYSTEM_PROMPT = DEFAULT_RESEARCH_SYSTEM_PROMPT
 
-class AgentState(TypedDict):
-    messages: Annotated[List[BaseMessage], operator.add]
-
-
-RESEARCH_SYSTEM_PROMPT = (
-    "You are DocumentGPT, an AI assistant that helps users understand their documents.\n"
-    "IMPORTANT RULES:\n"
-    "1. ALWAYS use document_search FIRST for any question about the user's documents.\n"
-    "2. Only use web_search if document_search returns no results or the user requests up-to-date context.\n"
-    "3. Cite sources with [1], [2], etc. when quoting documents. Cite the most relevant passage.\n"
-    "4. If you can't find information, say so clearly and suggest next steps.\n"
-    "5. Keep answers concise but informative, focusing on evidence from the documents."
-)
-
-
-def build_langgraph_agent(system_prompt: str, toolset: List[Tool]):
-    """Compile a LangGraph agent with ReAct-style tool usage."""
-    bound_llm = llm.bind_tools(toolset)
-    tool_node = ToolNode(toolset)
-
-    def call_model(state: AgentState):
-        response = bound_llm.invoke(state["messages"])
-        return {"messages": [response]}
-
-    workflow = StateGraph(AgentState)
-    workflow.add_node("agent", call_model)
-    workflow.add_node("tools", tool_node)
-    workflow.set_entry_point("agent")
-    workflow.add_conditional_edges("agent", tools_condition)
-    workflow.add_edge("tools", "agent")
-    compiled_app = workflow.compile()
-
-    def run(query: str, chat_history: Optional[List[BaseMessage]] = None):
-        messages: List[BaseMessage] = [SystemMessage(content=system_prompt)]
-        if chat_history:
-            messages.extend(chat_history)
-        messages.append(HumanMessage(content=query))
-        result_state = compiled_app.invoke({"messages": messages})
-        message_history = result_state["messages"]
-
-        # Extract final assistant response
-        ai_messages = [m for m in message_history if isinstance(m, AIMessage)]
-        response_text = ai_messages[-1].content if ai_messages else ""
-
-        # Gather tool traces for citations/debugging
-        citations = []
-        tool_traces = []
-        for m in message_history:
-            if isinstance(m, ToolMessage):
-                content_str = m.content if isinstance(m.content, str) else json.dumps(m.content)
-                citations.append({
-                    "tool": m.name or "tool",
-                    "result": content_str[:200],
-                })
-                tool_traces.append(content_str)
-
-        return response_text, citations, tool_traces
-
-    return run
-
-
-research_agent = build_langgraph_agent(RESEARCH_SYSTEM_PROMPT, tools)
+research_agent = build_langgraph_agent(llm, RESEARCH_SYSTEM_PROMPT, tools)
 
 def extract_pdf_text(content):
     """Extract text from PDF content"""
@@ -238,61 +173,158 @@ def lambda_handler(event, context):
             }
         
         # Upload endpoint
-        if path == '/dev/upload' and method == 'POST':
+        if path in ('/dev/upload', '/upload') and method == 'POST':
             body = json.loads(event['body'])
             user_id = body.get('user_id', 'guest_dev')
             filename = body.get('filename')
             content = body.get('content')
-            
-            if not content or not filename:
+            content_base64 = body.get('content_base64')
+            media_type = body.get('media_type')
+
+            if not filename:
                 return {
                     'statusCode': 400,
                     'headers': headers,
-                    'body': json.dumps({'error': 'Missing filename or content'})
+                    'body': json.dumps({'error': 'Missing filename'})
                 }
-            
+
+            if not content and not content_base64:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Missing content'})
+                }
+
             doc_id = f"doc_{int(datetime.now().timestamp())}"
             print(f"📄 Processing: {filename}")
-            
-            # Extract text if PDF
-            if filename.lower().endswith('.pdf'):
+
+            extension = os.path.splitext(filename)[1].lower()
+            guessed_type, _ = mimetypes.guess_type(filename)
+            media_type = media_type or guessed_type or 'application/octet-stream'
+
+            is_text_like = media_type.startswith('text/') or extension in {'.txt', '.md', '.markdown', '.csv'}
+            is_pdf = extension == '.pdf' or media_type == 'application/pdf'
+
+            binary_payload: Optional[bytes] = None
+
+            if content_base64:
+                try:
+                    binary_payload = base64.b64decode(content_base64)
+                except Exception:
+                    return {
+                        'statusCode': 400,
+                        'headers': headers,
+                        'body': json.dumps({'error': 'Invalid base64 payload'})
+                    }
+
+            if binary_payload and not (is_text_like or is_pdf):
+                if not MEDIA_BUCKET or not MEDIA_QUEUE_URL:
+                    return {
+                        'statusCode': 500,
+                        'headers': headers,
+                        'body': json.dumps({'error': 'Media processing not configured'})
+                    }
+
+                s3_key = f"uploads/{user_id}/{doc_id}/{filename}"
+                s3.put_object(
+                    Bucket=MEDIA_BUCKET,
+                    Key=s3_key,
+                    Body=binary_payload,
+                    ContentType=media_type,
+                )
+                print(f"☁️  Stored media in S3 at {s3_key}")
+
+                docs_table = dynamodb.Table(DOC_TABLE)
+                docs_table.put_item(Item={
+                    'pk': f'USER#{user_id}',
+                    'sk': f'DOC#{doc_id}',
+                    'doc_id': doc_id,
+                    'filename': filename,
+                    'media_type': media_type,
+                    'processing_status': 'processing',
+                    'created_at': datetime.now().isoformat()
+                })
+
+                job_payload = {
+                    'user_id': user_id,
+                    'doc_id': doc_id,
+                    'bucket': MEDIA_BUCKET,
+                    'key': s3_key,
+                    'media_type': media_type,
+                    'metadata': body.get('metadata') or {},
+                    'segments': body.get('segments') or [],
+                }
+                sqs.send_message(QueueUrl=MEDIA_QUEUE_URL, MessageBody=json.dumps(job_payload))
+                print(f"📬 Enqueued media processing job for {doc_id}")
+
+                return {
+                    'statusCode': 202,
+                    'headers': headers,
+                    'body': json.dumps({
+                        'message': 'Media received and queued for processing',
+                        'doc_id': doc_id,
+                        'processing_status': 'processing'
+                    })
+                }
+
+            if binary_payload and (is_text_like or is_pdf):
+                if is_pdf:
+                    content = extract_pdf_text(binary_payload)
+                else:
+                    content = binary_payload.decode('utf-8', errors='ignore')
+
+            if is_pdf and not binary_payload:
                 content = extract_pdf_text(content)
-            
-            # Split into chunks
+
+            if not content:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Unable to process document content'})
+                }
+
             chunks = text_splitter.split_text(content)
             print(f"✂️  Split into {len(chunks)} chunks")
-            
-            # Create metadata for each chunk
+
             metadatas = [{"doc_id": doc_id, "doc_name": filename, "chunk": i} for i in range(len(chunks))]
-            
-            # Upsert to Pinecone
+
+            print("🔧 Preparing Pinecone vector store", flush=True)
             vs = get_vector_store()
-            vs.add_texts(texts=chunks, metadatas=metadatas)
-            print(f"✅ Vectorized and stored in Pinecone")
-            
-            # Generate summary
+            print("🔧 Pinecone vector store ready, embedding chunks", flush=True)
+            try:
+                vs.add_texts(texts=chunks, metadatas=metadatas)
+            except Exception as pinecone_error:
+                print(f"❌ Pinecone upsert error: {pinecone_error!r}")
+                traceback.print_exc()
+                raise
+            print("✅ Vectorized and stored in Pinecone")
+
+            print("🧠 Generating summary", flush=True)
             summary = generate_summary(content, filename)
-            
-            # Generate preview questions
+            print("🧠 Summary generated", flush=True)
+
             questions = [
                 f"What are the main topics in {filename}?",
                 "Can you summarize the key findings?",
                 "What are the most important points?"
             ]
-            
-            # Save to DynamoDB
-            docs_table = dynamodb.Table('docgpt')
+
+            docs_table = dynamodb.Table(DOC_TABLE)
+            print("🗄️  Writing document metadata to DynamoDB", flush=True)
             docs_table.put_item(Item={
                 'pk': f'USER#{user_id}',
                 'sk': f'DOC#{doc_id}',
                 'doc_id': doc_id,
                 'filename': filename,
+                'media_type': media_type,
                 'content': content[:50000],
                 'summary': summary,
                 'questions': questions,
+                'processing_status': 'ready',
                 'created_at': datetime.now().isoformat()
             })
-            
+            print("🗄️  DynamoDB write complete", flush=True)
+
             return {
                 'statusCode': 200,
                 'headers': headers,
@@ -430,7 +462,7 @@ def lambda_handler(event, context):
             if not user_id:
                 return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Missing user_id'})}
             
-            docs_table = dynamodb.Table('docgpt')
+            docs_table = dynamodb.Table(DOC_TABLE)
             from boto3.dynamodb.conditions import Key
             resp = docs_table.query(
                 KeyConditionExpression=Key('pk').eq(f'USER#{user_id}') & Key('sk').begins_with('DOC#')
@@ -453,5 +485,6 @@ def lambda_handler(event, context):
         return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Not found'})}
     
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error: {e!r}")
+        traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}

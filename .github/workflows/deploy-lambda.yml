@@ -59,4 +59,4 @@ jobs:
       
       - name: Test deployment
         run: |
-          curl -f -X POST "https://snfkv26x4h5rojzzhql622whym0hvxjy.lambda-url.us-east-1.on.aws/dev/health" || exit 1
+          curl -f "https://snfkv26x4h5rojzzhql622whym0hvxjy.lambda-url.us-east-1.on.aws/dev/health" || exit 1

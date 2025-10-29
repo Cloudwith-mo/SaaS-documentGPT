@@ -1,419 +1,229 @@
 """
-DocumentGPT Dev Handler - RAG Implementation with Vector Search
-This is the development version with Pinecone vector database integration
+DocumentGPT Dev Handler - LangGraph Orchestration + MCP-style Tooling
 """
-import json
-import urllib3
 import os
+import json
 import boto3
 from datetime import datetime
 from decimal import Decimal
-from boto3.dynamodb.conditions import Key
+from typing import Annotated, List, Optional, TypedDict
+import operator
 
-# Initialize clients
-http = urllib3.PoolManager()
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.tools import Tool
+from pinecone import Pinecone
+from duckduckgo_search import DDGS
+
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
+from langgraph.graph import StateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
+
+# Environment
 OPENAI_API_KEY = os.environ['OPENAI_API_KEY']
-PINECONE_API_KEY = os.environ.get('PINECONE_API_KEY', '')
-PINECONE_INDEX_HOST = os.environ.get('PINECONE_INDEX_HOST', 'documentgpt-dev-t0mnwxg.svc.aped-4627-b74a.pinecone.io')
+PINECONE_API_KEY = os.environ['PINECONE_API_KEY']
+PINECONE_INDEX_NAME = os.environ.get('PINECONE_INDEX', 'documentgpt-dev')
+ALLOWED_ORIGINS = [o.strip() for o in os.environ.get('ALLOWED_ORIGINS', 'https://documentgpt.io').split(',')]
+DEFAULT_ORIGIN = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else '*'
 
+# AWS clients
 dynamodb = boto3.resource('dynamodb')
 s3 = boto3.client('s3')
 
-# Import PyPDF2 for PDF processing
-try:
-    import PyPDF2
-    import io
-except:
-    PyPDF2 = None
+# LangChain setup
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1, openai_api_key=OPENAI_API_KEY)
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=OPENAI_API_KEY)
+
+# Pinecone - lazy init
+vector_store = None
+
+def get_vector_store():
+    global vector_store
+    if vector_store is None:
+        pc = Pinecone(api_key=PINECONE_API_KEY)
+        index = pc.Index(PINECONE_INDEX_NAME)
+        vector_store = PineconeVectorStore(index=index, embedding=embeddings, text_key="text")
+    return vector_store
+
+# Text splitter
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
 
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Decimal):
             return int(obj)
-        return super(DecimalEncoder, self).default(obj)
+        return super().default(obj)
 
-def chunk_text(text, chunk_size=500, overlap=50):
-    """
-    Split text into overlapping chunks for embedding
-    chunk_size: approximate tokens per chunk (1 token ≈ 4 chars)
-    overlap: tokens to overlap between chunks
-    """
-    # Convert tokens to characters (rough estimate)
-    chars_per_chunk = chunk_size * 4
-    chars_overlap = overlap * 4
-    
-    chunks = []
-    start = 0
-    
-    while start < len(text):
-        end = start + chars_per_chunk
-        chunk = text[start:end]
-        
-        if chunk.strip():
-            chunks.append({
-                'text': chunk,
-                'start': start,
-                'end': end
-            })
-        
-        start = end - chars_overlap
-    
-    return chunks
-
-def generate_embeddings(text):
-    """Generate OpenAI embeddings for single text"""
-    url = 'https://api.openai.com/v1/embeddings'
-    headers = {
-        'Authorization': f'Bearer {OPENAI_API_KEY}',
-        'Content-Type': 'application/json'
-    }
-    
-    data = {
-        'model': 'text-embedding-ada-002',
-        'input': text[:8000]  # Limit to 8K chars (~2K tokens)
-    }
-    
-    response = http.request('POST', url, body=json.dumps(data), headers=headers)
-    result = json.loads(response.data.decode('utf-8'))
-    
-    if 'error' in result:
-        print(f"❌ OpenAI embedding error: {result['error']}")
-        raise Exception(f"OpenAI error: {result['error'].get('message', 'Unknown')}")
-    
-    if 'data' in result and len(result['data']) > 0:
-        return result['data'][0]['embedding']
-    
-    print(f"❌ Unexpected embedding response: {result}")
-    raise Exception('Failed to generate embedding')
-
-def call_openai_with_retry(func, max_retries=3):
-    """Retry OpenAI calls with exponential backoff"""
-    import time
-    for attempt in range(max_retries):
-        try:
-            return func()
-        except Exception as e:
-            error_str = str(e)
-            if attempt == max_retries - 1:
-                raise
-            # Retry on rate limits (429) or server errors (5xx)
-            if '429' in error_str or (len(error_str) > 0 and error_str[0] == '5'):
-                wait_time = 2 ** attempt
-                print(f"⚠️ Retry {attempt + 1}/{max_retries} after {wait_time}s")
-                time.sleep(wait_time)
-            else:
-                raise
-
-def generate_embeddings_batch(texts):
-    """Generate OpenAI embeddings for multiple texts in one call (10x faster)"""
-    def _embed():
-        url = 'https://api.openai.com/v1/embeddings'
-        headers = {
-            'Authorization': f'Bearer {OPENAI_API_KEY}',
-            'Content-Type': 'application/json'
-        }
-        
-        # Truncate each text to 8K chars
-        truncated_texts = [t[:8000] for t in texts]
-        
-        data = {
-            'model': 'text-embedding-ada-002',
-            'input': truncated_texts
-        }
-        
-        response = http.request('POST', url, body=json.dumps(data), headers=headers)
-        result = json.loads(response.data.decode('utf-8'))
-        
-        if 'error' in result:
-            print(f"❌ OpenAI batch embedding error: {result['error']}")
-            raise Exception(f"OpenAI error: {result['error'].get('message', 'Unknown')}")
-        
-        if 'data' in result:
-            return [item['embedding'] for item in result['data']]
-        
-        print(f"❌ Unexpected batch embedding response: {result}")
-        raise Exception('Failed to generate batch embeddings')
-    
-    return call_openai_with_retry(_embed)
-
-def upsert_batch(url, headers, batch):
-    """Upsert single batch to Pinecone"""
-    data = {'vectors': batch}
-    response = http.request('POST', url, body=json.dumps(data), headers=headers)
-    return response.status == 200
-
-def store_in_pinecone(doc_id, doc_name, chunks_with_embeddings):
-    """Store document chunks and embeddings in Pinecone with parallel upsert"""
-    if not PINECONE_API_KEY:
-        print("⚠️ Pinecone not configured, skipping vector storage")
-        return False
-    
-    url = f'https://{PINECONE_INDEX_HOST}/vectors/upsert'
-    headers = {
-        'Api-Key': PINECONE_API_KEY,
-        'Content-Type': 'application/json'
-    }
-    
-    vectors = []
-    for idx, chunk_data in enumerate(chunks_with_embeddings):
-        vectors.append({
-            'id': f"{doc_id}_chunk_{idx}",
-            'values': chunk_data['embedding'],
-            'metadata': {
-                'doc_id': doc_id,
-                'doc_name': doc_name,
-                'chunk_index': idx,
-                'text': chunk_data['text'][:1000],
-                'start_pos': chunk_data['start'],
-                'end_pos': chunk_data['end']
-            }
-        })
-    
-    # Parallel upsert in batches of 100
-    import concurrent.futures
-    batch_size = 100
-    batches = [vectors[i:i+batch_size] for i in range(0, len(vectors), batch_size)]
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [executor.submit(upsert_batch, url, headers, batch) for batch in batches]
-        results = [f.result() for f in concurrent.futures.as_completed(futures)]
-    
-    if all(results):
-        print(f"✅ Stored {len(vectors)} chunks in Pinecone (parallel)")
-        return True
-    print(f"⚠️ Some batches failed")
-    return False
-
-def query_pinecone(query_text, doc_id=None, top_k=5):
-    """Query Pinecone for relevant document chunks with optional doc filter"""
-    if not PINECONE_API_KEY:
-        print("⚠️ Pinecone not configured, returning empty results")
-        return []
-    
-    try:
-        # Generate embedding for query
-        query_embedding = generate_embeddings(query_text)
-    except Exception as e:
-        print(f"⚠️ Query embedding failed: {e}")
-        return []
-    
-    # Pinecone data plane endpoint
-    url = f'https://{PINECONE_INDEX_HOST}/query'
-    headers = {
-        'Api-Key': PINECONE_API_KEY,
-        'Content-Type': 'application/json'
-    }
-    
-    data = {
-        'vector': query_embedding,
-        'topK': top_k,
-        'includeMetadata': True
-    }
-    
-    # Add doc_id filter if provided (prevents cross-document contamination)
-    if doc_id:
-        data['filter'] = {'doc_id': {'$eq': doc_id}}
-    
-    try:
-        response = http.request('POST', url, body=json.dumps(data), headers=headers)
-        result = json.loads(response.data.decode('utf-8'))
-        
-        if 'matches' in result:
-            return result['matches']
-    except Exception as e:
-        print(f"⚠️ Pinecone query failed: {e}")
-    
-    return []
-
-def classify_intent(query):
-    """Classify user intent: summary, compare, or qa"""
-    import re
-    query_lower = query.lower()
-    if re.search(r'\b(summar(y|ize|ise)|overview|abstract|gist|tl;?dr)\b', query_lower):
-        return 'summary'
-    if re.search(r'\b(compare|contrast|difference|similarities)\b', query_lower):
-        return 'compare'
-    return 'qa'
-
-def generate_summary_and_questions(text, doc_name="Document"):
-    """Generate document summary and preview questions - handles large docs"""
-    url = 'https://api.openai.com/v1/chat/completions'
-    headers = {
-        'Authorization': f'Bearer {OPENAI_API_KEY}',
-        'Content-Type': 'application/json'
-    }
-    
-    # For large docs: use first 4K + middle 2K + last 2K chars
-    if len(text) > 12000:
-        sample = text[:4000] + "\n...\n" + text[len(text)//2:len(text)//2+2000] + "\n...\n" + text[-2000:]
-    else:
-        sample = text[:12000]
-    
-    data = {
-        'model': 'gpt-3.5-turbo',
-        'messages': [{
-            'role': 'system',
-            'content': 'Return JSON {"summary":string, "questions":string[]} with 3-5 sentence summary and 3 specific questions.'
-        }, {
-            'role': 'user',
-            'content': f"Document: {doc_name}\n\n{sample}"
-        }],
-        'temperature': 0,
-        'response_format': {'type': 'json_object'}
-    }
-    
-    response = http.request('POST', url, body=json.dumps(data), headers=headers)
-    result = json.loads(response.data.decode('utf-8'))
-    
-    if 'choices' in result:
-        return json.loads(result['choices'][0]['message']['content'])
-    
-    # Fallback: always return something
+def make_headers(content_type='application/json', request_headers=None):
+    req_headers = request_headers or {}
+    request_origin = req_headers.get('origin') or req_headers.get('Origin')
+    cors_origin = request_origin if request_origin in ALLOWED_ORIGINS else DEFAULT_ORIGIN
     return {
-        'summary': f'This document ({doc_name}) contains {len(text)} characters. Upload successful - you can now ask questions about the content.',
-        'questions': [
-            'What are the main topics covered in this document?',
-            'Can you summarize the key findings?',
-            'What are the most important points?'
-        ]
+        'Content-Type': content_type,
+        'Access-Control-Allow-Origin': cors_origin,
+        'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+        'Access-Control-Allow-Credentials': 'true' if cors_origin != '*' else 'false'
     }
 
-def select_model(query, user_tier='free'):
-    """Select optimal model based on query complexity and user tier"""
-    if user_tier in ['premium', 'pro', 'business']:
-        if len(query) > 100 or any(word in query.lower() for word in ['analyze', 'compare', 'explain', 'detailed']):
-            return 'gpt-4-turbo-preview'
-    return 'gpt-3.5-turbo'
-
-def openai_chat_with_context(query, context_chunks, stream=False, user_tier='free'):
-    """
-    Call OpenAI with RAG context - Evidence-first with strict citations
-    Supports streaming for real-time token display
-    """
-    url = 'https://api.openai.com/v1/chat/completions'
-    headers = {
-        'Authorization': f'Bearer {OPENAI_API_KEY}',
-        'Content-Type': 'application/json'
-    }
-    
-    model = select_model(query, user_tier)
-    
-    # Build context from chunks (top 5 for precision)
-    context_text = ""
-    citations = []
-    
-    for idx, chunk in enumerate(context_chunks[:5], 1):
-        metadata = chunk.get('metadata', {})
-        text = metadata.get('text', '')[:1200]  # Trim to 1200 chars
-        doc_name = metadata.get('doc_name', 'Unknown')
+# MCP-style Tools
+def pinecone_retrieve(query: str, doc_id: str = None) -> str:
+    """Retrieve relevant document chunks from Pinecone vector database"""
+    try:
+        vs = get_vector_store()
+        filter_dict = {"doc_id": doc_id} if doc_id else None
+        results = vs.similarity_search(query, k=5, filter=filter_dict)
         
-        context_text += f"[{idx}] {text}\n\n"
-        # Estimate page number (assuming ~3000 chars per page)
-        start_pos = metadata.get('start_pos', 0)
-        page_num = (start_pos // 3000) + 1
+        if not results:
+            return "No relevant passages found in documents."
         
-        citations.append({
-            'n': idx,
-            'doc_id': metadata.get('doc_id'),
-            'docName': doc_name,
-            'page': page_num,
-            'text': text[:300],
-            'score': chunk.get('score', 0)
-        })
-    
-    # Strict evidence-first prompt
-    system_prompt = """Use ONLY EVIDENCE sections. Every factual sentence must end with [n]. If unsupported by evidence, say you can't find it in the document."""
-    
-    user_prompt = f"""EVIDENCE:
-{context_text}
+        context = "\n\n".join([f"[{i+1}] {doc.page_content}" for i, doc in enumerate(results)])
+        return f"RELEVANT PASSAGES:\n{context}"
+    except Exception as e:
+        print(f"⚠️ Pinecone retrieve error: {e}")
+        return "Error retrieving from vector database."
 
-QUESTION: {query}
-ANSWER:"""
-    
-    data = {
-        'model': model,
-        'messages': [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_prompt}
-        ],
-        'temperature': 0,
-        'max_tokens': 500,
-        'stream': stream
-    }
-    
-    if stream:
-        # Return generator for streaming
-        response = http.request('POST', url, body=json.dumps(data), headers=headers, preload_content=False)
-        return stream_openai_response(response, citations)
-    
-    response = http.request('POST', url, body=json.dumps(data), headers=headers)
-    result = json.loads(response.data.decode('utf-8'))
-    
-    if 'error' in result:
-        print(f"❌ OpenAI error: {result['error']}")
-        return {
-            'answer': 'Sorry, I could not process that request.',
-            'citations': [],
-            'context_used': 0
-        }
-    
-    if 'choices' in result and len(result['choices']) > 0:
-        answer = result['choices'][0]['message']['content']
-        # Guardrail: ensure citations present
-        import re
-        if not re.search(r'\[\d+\]', answer):
-            answer = "I can't find support for that in the document."
-            citations = []
-        return {
-            'answer': answer,
-            'citations': citations,
-            'context_used': len(context_chunks)
-        }
-    
-    print(f"❌ Unexpected OpenAI response: {result}")
-    return {
-        'answer': 'Sorry, I could not process that request.',
-        'citations': [],
-        'context_used': 0
-    }
+def web_search(query: str) -> str:
+    """Search the web for supplemental information"""
+    try:
+        results = DDGS().text(query, max_results=3)
+        if not results:
+            return "No web results found."
+        
+        snippets = [f"• {r['title']}: {r['body'][:200]}... (source: {r['href']})" for r in results]
+        return "WEB RESULTS:\n" + "\n".join(snippets)
+    except Exception as e:
+        print(f"⚠️ Web search error: {e}")
+        return "Web search unavailable."
 
-def stream_openai_response(response, citations):
-    """Stream OpenAI response tokens"""
-    for line in response.stream(decode_content=True):
-        line = line.decode('utf-8').strip()
-        if line.startswith('data: '):
-            if line == 'data: [DONE]':
-                break
-            try:
-                chunk = json.loads(line[6:])
-                if 'choices' in chunk and len(chunk['choices']) > 0:
-                    delta = chunk['choices'][0].get('delta', {})
-                    if 'content' in delta:
-                        yield {'token': delta['content'], 'citations': citations}
-            except:
-                continue
+# Define tools (mutable list so we can swap document filter per-request)
+tools = [
+    Tool(
+        name="document_search",
+        func=lambda q: pinecone_retrieve(q),
+        description="Search user's uploaded documents for relevant information. Use this FIRST for any question about documents.",
+    ),
+    Tool(
+        name="web_search",
+        func=web_search,
+        description="Search the web for current information or facts not in documents. Use ONLY if document_search returns no results.",
+    ),
+]
+
+
+class AgentState(TypedDict):
+    messages: Annotated[List[BaseMessage], operator.add]
+
+
+RESEARCH_SYSTEM_PROMPT = (
+    "You are DocumentGPT, an AI assistant that helps users understand their documents.\n"
+    "IMPORTANT RULES:\n"
+    "1. ALWAYS use document_search FIRST for any question about the user's documents.\n"
+    "2. Only use web_search if document_search returns no results or the user requests up-to-date context.\n"
+    "3. Cite sources with [1], [2], etc. when quoting documents. Cite the most relevant passage.\n"
+    "4. If you can't find information, say so clearly and suggest next steps.\n"
+    "5. Keep answers concise but informative, focusing on evidence from the documents."
+)
+
+
+def build_langgraph_agent(system_prompt: str, toolset: List[Tool]):
+    """Compile a LangGraph agent with ReAct-style tool usage."""
+    bound_llm = llm.bind_tools(toolset)
+    tool_node = ToolNode(toolset)
+
+    def call_model(state: AgentState):
+        response = bound_llm.invoke(state["messages"])
+        return {"messages": [response]}
+
+    workflow = StateGraph(AgentState)
+    workflow.add_node("agent", call_model)
+    workflow.add_node("tools", tool_node)
+    workflow.set_entry_point("agent")
+    workflow.add_conditional_edges("agent", tools_condition)
+    workflow.add_edge("tools", "agent")
+    compiled_app = workflow.compile()
+
+    def run(query: str, chat_history: Optional[List[BaseMessage]] = None):
+        messages: List[BaseMessage] = [SystemMessage(content=system_prompt)]
+        if chat_history:
+            messages.extend(chat_history)
+        messages.append(HumanMessage(content=query))
+        result_state = compiled_app.invoke({"messages": messages})
+        message_history = result_state["messages"]
+
+        # Extract final assistant response
+        ai_messages = [m for m in message_history if isinstance(m, AIMessage)]
+        response_text = ai_messages[-1].content if ai_messages else ""
+
+        # Gather tool traces for citations/debugging
+        citations = []
+        tool_traces = []
+        for m in message_history:
+            if isinstance(m, ToolMessage):
+                content_str = m.content if isinstance(m.content, str) else json.dumps(m.content)
+                citations.append({
+                    "tool": m.name or "tool",
+                    "result": content_str[:200],
+                })
+                tool_traces.append(content_str)
+
+        return response_text, citations, tool_traces
+
+    return run
+
+
+research_agent = build_langgraph_agent(RESEARCH_SYSTEM_PROMPT, tools)
+
+def extract_pdf_text(content):
+    """Extract text from PDF content"""
+    try:
+        import PyPDF2
+        import io
+        pdf_file = io.BytesIO(content.encode('latin-1') if isinstance(content, str) else content)
+        reader = PyPDF2.PdfReader(pdf_file)
+        return "\n".join([page.extract_text() for page in reader.pages])
+    except Exception as e:
+        print(f"⚠️ PDF extraction failed: {e}")
+        return content
+
+def generate_summary(text, doc_name):
+    """Generate document summary using LLM"""
+    try:
+        prompt = f"Summarize this document in 3-5 sentences:\n\n{text[:8000]}"
+        response = llm.invoke(prompt)
+        return response.content
+    except Exception as e:
+        print(f"⚠️ Summary generation failed: {e}")
+        return f"Document {doc_name} uploaded successfully."
 
 def lambda_handler(event, context):
-    """Main Lambda handler for dev environment"""
-    headers = {'Content-Type': 'application/json'}
+    """Main Lambda handler"""
+    request_headers = event.get('headers', {})
+    headers = make_headers(request_headers=request_headers)
     
     try:
-        # Support both API Gateway v1/v2 and Lambda URL formats
+        # Parse request
         if 'requestContext' in event and 'http' in event['requestContext']:
-            # Lambda URL or API Gateway v2
             method = event['requestContext']['http']['method']
-            path = event.get('rawPath', event['requestContext']['http'].get('path', ''))
+            path = event.get('rawPath', '')
         else:
-            # API Gateway v1
             method = event.get('httpMethod', '')
             path = event.get('path', '')
         
-        print(f"Path: {path}, Method: {method}")  # Debug
+        print(f"📍 {method} {path}")
         
+        # OPTIONS
         if method == 'OPTIONS':
             return {'statusCode': 200, 'headers': headers, 'body': ''}
         
-        # Health check endpoint
+        # Health check
         if path == '/dev/health' and method == 'GET':
             return {
                 'statusCode': 200,
@@ -421,13 +231,14 @@ def lambda_handler(event, context):
                 'body': json.dumps({
                     'status': 'healthy',
                     'environment': 'dev',
-                    'rag_enabled': bool(PINECONE_API_KEY),
+                    'langchain': True,
+                    'mcp_enabled': True,
                     'timestamp': datetime.now().isoformat()
                 })
             }
         
-        # Upload endpoint with RAG processing
-        elif path == '/dev/upload' and method == 'POST':
+        # Upload endpoint
+        if path == '/dev/upload' and method == 'POST':
             body = json.loads(event['body'])
             user_id = body.get('user_id', 'guest_dev')
             filename = body.get('filename')
@@ -440,67 +251,36 @@ def lambda_handler(event, context):
                     'body': json.dumps({'error': 'Missing filename or content'})
                 }
             
-            # Generate document ID
             doc_id = f"doc_{int(datetime.now().timestamp())}"
+            print(f"📄 Processing: {filename}")
             
-            # Step 1: Generate summary (always succeeds)
-            print(f"📄 Processing: {filename} ({len(content)} chars)")
-            try:
-                summary_data = generate_summary_and_questions(content, filename)
-            except Exception as e:
-                print(f"⚠️ Summary failed: {e}")
-                summary_data = {
-                    'summary': f'Document uploaded successfully. You can now ask questions about {filename}.',
-                    'questions': [
-                        'What is this document about?',
-                        'What are the main points?',
-                        'Can you summarize the key findings?'
-                    ]
-                }
+            # Extract text if PDF
+            if filename.lower().endswith('.pdf'):
+                content = extract_pdf_text(content)
             
-            # Step 2: Vectorize and store in Pinecone (batched for 10x speed)
-            import time
-            embed_start = time.time()
+            # Split into chunks
+            chunks = text_splitter.split_text(content)
+            print(f"✂️  Split into {len(chunks)} chunks")
             
-            chunks = chunk_text(content)
-            chunks_with_embeddings = []
+            # Create metadata for each chunk
+            metadatas = [{"doc_id": doc_id, "doc_name": filename, "chunk": i} for i in range(len(chunks))]
             
-            # Process in batches of 10 for 10x speedup
-            batch_size = 10
-            for i in range(0, len(chunks), batch_size):
-                batch = chunks[i:i+batch_size]
-                try:
-                    batch_texts = [c['text'] for c in batch]
-                    embeddings = generate_embeddings_batch(batch_texts)
-                    
-                    for j, embedding in enumerate(embeddings):
-                        chunks_with_embeddings.append({
-                            'text': batch[j]['text'],
-                            'start': batch[j]['start'],
-                            'end': batch[j]['end'],
-                            'embedding': embedding
-                        })
-                except Exception as e:
-                    print(f"⚠️ Batch embedding failed: {e}")
-                    break
+            # Upsert to Pinecone
+            vs = get_vector_store()
+            vs.add_texts(texts=chunks, metadatas=metadatas)
+            print(f"✅ Vectorized and stored in Pinecone")
             
-            embed_time = (time.time() - embed_start) * 1000
-            print(f"⏱️  Embedding time: {embed_time:.0f}ms for {len(chunks_with_embeddings)} chunks")
+            # Generate summary
+            summary = generate_summary(content, filename)
             
-            if chunks_with_embeddings:
-                store_in_pinecone(doc_id, filename, chunks_with_embeddings)
-                print(f"✅ Vectorized {len(chunks_with_embeddings)} chunks")
-            else:
-                print(f"⚠️ No vectors created - answers may not have citations")
-                # Ensure questions array exists even without vectorization
-                if not summary_data.get('questions'):
-                    summary_data['questions'] = [
-                        'What is this document about?',
-                        'What are the main points?',
-                        'Can you summarize the key findings?'
-                    ]
+            # Generate preview questions
+            questions = [
+                f"What are the main topics in {filename}?",
+                "Can you summarize the key findings?",
+                "What are the most important points?"
+            ]
             
-            # Step 3: Save to DynamoDB
+            # Save to DynamoDB
             docs_table = dynamodb.Table('docgpt')
             docs_table.put_item(Item={
                 'pk': f'USER#{user_id}',
@@ -508,95 +288,29 @@ def lambda_handler(event, context):
                 'doc_id': doc_id,
                 'filename': filename,
                 'content': content[:50000],
-                'summary': summary_data.get('summary', ''),
-                'questions': summary_data.get('questions', []),
+                'summary': summary,
+                'questions': questions,
                 'created_at': datetime.now().isoformat()
             })
-            
-            response_data = {
-                'message': 'Document uploaded',
-                'doc_id': doc_id,
-                'artifact': summary_data
-            }
             
             return {
                 'statusCode': 200,
                 'headers': headers,
-                'body': json.dumps(response_data)
+                'body': json.dumps({
+                    'message': 'Document uploaded',
+                    'doc_id': doc_id,
+                    'artifact': {
+                        'summary': summary,
+                        'questions': questions
+                    }
+                })
             }
         
-        # Usage endpoint
-        elif path == '/usage' and method == 'GET':
-            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'plan': 'premium', 'chats_used': 0, 'limit': -1})}
-        
-        # Documents endpoint
-        elif path == '/documents' and method == 'GET':
-            user_id = event.get('queryStringParameters', {}).get('user_id') if event.get('queryStringParameters') else None
-            if not user_id:
-                return {
-                    'statusCode': 400,
-                    'headers': headers,
-                    'body': json.dumps({'error': 'Missing user_id'})
-                }
-            docs_table = dynamodb.Table('docgpt')
-            try:
-                resp = docs_table.query(
-                    KeyConditionExpression=Key('pk').eq(f'USER#{user_id}') & Key('sk').begins_with('DOC#'),
-                    ProjectionExpression='doc_id, filename, summary, questions, created_at, content, chat_history'
-                )
-                documents = [{
-                    'doc_id': item.get('doc_id'),
-                    'id': item.get('doc_id'),
-                    'filename': item.get('filename'),
-                    'summary': item.get('summary', ''),
-                    'questions': item.get('questions', []),
-                    'created_at': item.get('created_at'),
-                    'content': item.get('content', ''),
-                    'chat_history': item.get('chat_history', [])
-                } for item in resp.get('Items', [])]
-            except Exception as e:
-                print(f"⚠️ Dynamo query failed: {e}")
-                documents = []
-            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'documents': documents}, cls=DecimalEncoder)}
-        
-        elif path == '/documents' and method == 'POST':
-            body = json.loads(event.get('body') or '{}')
-            user_id = body.get('user_id')
-            doc_id = body.get('doc_id')
-            if not user_id or not doc_id:
-                return {
-                    'statusCode': 400,
-                    'headers': headers,
-                    'body': json.dumps({'error': 'Missing user_id or doc_id'})
-                }
-            docs_table = dynamodb.Table('docgpt')
-            try:
-                update_expression = 'SET filename=:name, content=:content, summary=:summary, questions=:questions, updated_at=:updated_at'
-                expression_values = {
-                    ':name': body.get('name', ''),
-                    ':content': (body.get('content') or '')[:50000],
-                    ':summary': body.get('summary', ''),
-                    ':questions': body.get('questions', []),
-                    ':updated_at': datetime.now().isoformat()
-                }
-                if 'chat_history' in body:
-                    update_expression += ', chat_history=:chat_history'
-                    expression_values[':chat_history'] = body.get('chat_history', [])
-                docs_table.update_item(
-                    Key={'pk': f'USER#{user_id}', 'sk': f'DOC#{doc_id}'},
-                    UpdateExpression=update_expression,
-                    ExpressionAttributeValues=expression_values
-                )
-            except Exception as e:
-                print(f"⚠️ Document sync failed: {e}")
-                return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': 'Failed to sync document'})}
-            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'message': 'Saved'})}
-        
-        # Chat endpoint with RAG and intent routing
-        elif path == '/dev/chat' and method == 'POST':
+        # Chat endpoint with LangChain agent
+        if path == '/dev/chat' and method == 'POST':
             body = json.loads(event['body'])
             query = body.get('query') or body.get('messages', [{}])[-1].get('content', '')
-            stream = body.get('stream', False)
+            doc_id = body.get('doc_id') or body.get('documentId')
             
             if not query:
                 return {
@@ -605,77 +319,139 @@ def lambda_handler(event, context):
                     'body': json.dumps({'error': 'No query provided'})
                 }
             
-            # Intent routing
-            intent = classify_intent(query)
-            print(f"🎯 Intent: {intent}")
+            print(f"💬 Query: {query[:100]}")
             
-            # Summary intent: return stored artifact or generate on-the-fly
-            if intent == 'summary':
-                # Try to get stored summary from DynamoDB
-                doc_preview = body.get('docPreview', '')[:12000]
-                if doc_preview:
-                    summary_data = generate_summary_and_questions(doc_preview, "This document")
-                    return {
-                        'statusCode': 200,
-                        'headers': headers,
-                        'body': json.dumps({
-                            'response': summary_data.get('summary', ''),
-                            'previewQuestions': summary_data.get('questions', []),
-                            'citations': []
-                        })
-                    }
+            # Modify pinecone_retrieve to use doc_id if provided
+            original_func = tools[0].func
+            if doc_id:
+                tools[0].func = lambda q, doc_id=doc_id: pinecone_retrieve(q, doc_id)
             
-            # QA intent: use RAG
-            doc_id = body.get('doc_id') or body.get('documentId')
-            print(f"🔍 Searching for: {query[:100]} (doc: {doc_id})")
-            matches = query_pinecone(query, doc_id=doc_id, top_k=8)
-            print(f"📚 Found {len(matches)} relevant chunks")
-            
-            if stream:
-                # Streaming response
-                if matches:
-                    stream_headers = {'Content-Type': 'text/event-stream'}
-                    def generate():
-                        for chunk in openai_chat_with_context(query, matches, stream=True):
-                            yield f"data: {json.dumps(chunk)}\n\n"
-                        yield "data: [DONE]\n\n"
-                    return {
-                        'statusCode': 200,
-                        'headers': stream_headers,
-                        'body': generate()
-                    }
-            
-            # Non-streaming response
-            if matches:
-                result = openai_chat_with_context(query, matches)
-            else:
-                result = {
-                    'answer': "I couldn't find relevant passages in your documents. The document may not have been vectorized yet.",
-                    'citations': [],
-                    'context_used': 0
+            # Run agent
+            try:
+                response_text, citations, tool_traces = research_agent(query)
+                return {
+                    'statusCode': 200,
+                    'headers': headers,
+                    'body': json.dumps({
+                        'response': response_text,
+                        'citations': citations,
+                        'tool_traces': tool_traces
+                    })
                 }
+            except Exception as e:
+                print(f"❌ Agent error: {e}")
+                return {
+                    'statusCode': 500,
+                    'headers': headers,
+                    'body': json.dumps({
+                        'response': 'Sorry, I encountered an error processing your request.',
+                        'error': str(e)
+                    })
+                }
+            finally:
+                tools[0].func = original_func
+
+        if path == '/dev/autocomplete' and method == 'POST':
+            try:
+                body = json.loads(event.get('body') or '{}')
+            except json.JSONDecodeError:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Invalid JSON body'})
+                }
+
+            context = (body.get('context') or '').strip()
+            max_tokens = int(body.get('max_tokens', 30))
+            style = (body.get('style') or '').lower().strip()
+
+            if len(context) < 20:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Context too short'})
+                }
+
+            max_tokens = max(10, min(max_tokens, 80))
+
+            style_instructions = {
+                'hemingway': "Write with short, vivid sentences and concrete imagery, reminiscent of Ernest Hemingway.",
+                'academic': "Adopt a formal, academic tone with precise language and clear argumentation.",
+                'casual': "Use a relaxed, conversational tone as if speaking with a friend.",
+                'storyteller': "Continue with descriptive, narrative prose that builds atmosphere and emotion.",
+                'poetic': "Respond with lyrical, poetic language that leans on metaphor and rhythm.",
+            }
+
+            system_prompt = (
+                "You are DocumentGPT's AI co-writer. Continue the user's draft naturally, matching their tense, "
+                "perspective, and voice. Output only the continuation—no preamble, no closing quotes."
+            )
+            if style in style_instructions:
+                system_prompt += f" {style_instructions[style]}"
+
+            context_window = context[-8000:]
+            desired_words = max_tokens // 2
+            human_prompt = (
+                "Draft continuation request:\n"
+                "---------------------------\n"
+                f"{context_window}\n\n"
+                f"Continue in the same format with roughly {desired_words}-{desired_words + 3} words."
+            )
+
+            try:
+                response = llm.invoke(
+                    [
+                        SystemMessage(content=system_prompt),
+                        HumanMessage(content=human_prompt),
+                    ],
+                    max_tokens=max_tokens,
+                )
+                completion = (response.content or "").strip().strip('"').strip("'")
+
+                return {
+                    'statusCode': 200,
+                    'headers': headers,
+                    'body': json.dumps({'completion': completion})
+                }
+            except Exception as err:
+                print(f"❌ Autocomplete error: {err}")
+                return {
+                    'statusCode': 500,
+                    'headers': headers,
+                    'body': json.dumps({
+                        'error': 'Failed to generate completion',
+                        'detail': str(err)
+                    })
+                }
+
+        # Documents endpoint
+        if path == '/documents' and method == 'GET':
+            user_id = event.get('queryStringParameters', {}).get('user_id')
+            if not user_id:
+                return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Missing user_id'})}
             
-            return {
-                'statusCode': 200,
-                'headers': headers,
-                'body': json.dumps({
-                    'response': result['answer'],
-                    'citations': result['citations'],
-                    'context_used': result['context_used']
-                })
-            }
+            docs_table = dynamodb.Table('docgpt')
+            from boto3.dynamodb.conditions import Key
+            resp = docs_table.query(
+                KeyConditionExpression=Key('pk').eq(f'USER#{user_id}') & Key('sk').begins_with('DOC#')
+            )
+            
+            documents = [{
+                'doc_id': item.get('doc_id'),
+                'filename': item.get('filename'),
+                'summary': item.get('summary', ''),
+                'questions': item.get('questions', []),
+                'created_at': item.get('created_at')
+            } for item in resp.get('Items', [])]
+            
+            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'documents': documents}, cls=DecimalEncoder)}
         
-        else:
-            return {
-                'statusCode': 404,
-                'headers': headers,
-                'body': json.dumps({'error': 'Endpoint not found'})
-            }
+        # Usage endpoint
+        if path == '/usage' and method == 'GET':
+            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'plan': 'premium', 'chats_used': 0, 'limit': -1})}
+        
+        return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Not found'})}
     
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
-        return {
-            'statusCode': 500,
-            'headers': headers,
-            'body': json.dumps({'error': str(e)})
-        }
+        print(f"❌ Error: {e}")
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}

@@ -13,6 +13,19 @@ fi
 
 echo "✅ Queue found: $MEDIA_QUEUE_URL"
 
+# Prepare sample asset
+TEST_BUCKET="docgpt-media-dev"
+TEST_KEY="uploads/test_user/test-media/nova-worker-sample.txt"
+echo ""
+echo "📝 Preparing sample file for Nova test..."
+TMP_FILE=$(mktemp)
+echo "This is a Nova embedding smoke test generated at $(date -u +"%Y-%m-%dT%H:%M:%SZ")." > "$TMP_FILE"
+
+echo "☁️  Uploading sample to s3://$TEST_BUCKET/$TEST_KEY"
+aws s3 cp "$TMP_FILE" "s3://$TEST_BUCKET/$TEST_KEY" --content-type text/plain >/dev/null
+rm "$TMP_FILE"
+echo "✅ Sample uploaded"
+
 # Test 1: Send test message
 echo ""
 echo "📤 Test 1: Sending test message to queue..."
@@ -21,8 +34,9 @@ aws sqs send-message \
   --message-body '{
     "doc_id": "test_'$(date +%s)'",
     "user_id": "test_user",
-    "s3_key": "test/sample.jpg",
-    "media_type": "image"
+    "bucket": "'$TEST_BUCKET'",
+    "key": "'$TEST_KEY'",
+    "media_type": "text/plain"
   }'
 
 echo "✅ Message sent"

@@ -107,7 +107,7 @@ cat > /tmp/policy.json <<EOF
     {
       "Effect": "Allow",
       "Action": ["bedrock:InvokeModel","bedrock:InvokeModelWithResponseStream"],
-      "Resource": ["arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-embed-multimodal-v1:0"]
+      "Resource": ["arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-*"]
     }
   ]
 }
@@ -262,7 +262,7 @@ aws lambda update-function-configuration \
     PINECONE_INDEX_HOST=$PINECONE_HOST,
     PINECONE_INDEX=documentgpt-dev,
     BEDROCK_REGION=us-east-1,
-    NOVA_EMBEDDING_MODEL=amazon.nova-embed-multimodal-v1:0,
+    NOVA_EMBEDDING_MODEL=amazon.nova-2-multimodal-embeddings-v1:0,
     MEDIA_BUCKET=docgpt-media-dev,
     MEDIA_QUEUE_URL=$MEDIA_QUEUE_URL
   }"

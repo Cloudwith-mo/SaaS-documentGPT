@@ -16,6 +16,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.tools import Tool
+from langchain_core.messages import HumanMessage, SystemMessage
 from pinecone import Pinecone
 
 from agents import DEFAULT_RESEARCH_SYSTEM_PROMPT, build_langgraph_agent, web_search
@@ -56,7 +57,7 @@ def get_vector_store():
     if vector_store is None:
         try:
             pc = Pinecone(api_key=PINECONE_API_KEY)
-            index = pc.Index(PINECONE_INDEX_NAME)
+            index = pc.Index(PINECONE_INDEX_NAME, pool_threads=1)
             vector_store = PineconeVectorStore(index=index, embedding=embeddings, text_key="text")
         except Exception as init_error:
             print(f"❌ Pinecone init error: {init_error!r}")

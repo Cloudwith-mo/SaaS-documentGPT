@@ -4,6 +4,7 @@ import {
   PutCommand,
   QueryCommand,
   UpdateCommand,
+  GetCommand,
 } from "@aws-sdk/lib-dynamodb";
 
 const lambdaRuntime =
@@ -28,6 +29,19 @@ const PINECONE_INDEX_HOST =
   process.env.PINECONE_INDEX_HOST ||
   "documentgpt-dev-t0mnwxg.svc.aped-4627-b74a.pinecone.io";
 const DOC_TABLE = process.env.DOC_TABLE || "docgpt";
+const ALLOWED_ORIGINS = (
+  process.env.ALLOWED_ORIGINS || "https://documentgpt.io"
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+if (ALLOWED_ORIGINS.length > 1 && ALLOWED_ORIGINS.includes("*")) {
+  for (let i = ALLOWED_ORIGINS.length - 1; i >= 0; i -= 1) {
+    if (ALLOWED_ORIGINS[i] === "*") ALLOWED_ORIGINS.splice(i, 1);
+  }
+}
+
+const MAX_CHAT_MESSAGES = Number(process.env.MAX_CHAT_MESSAGES || 50);
 
 const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: {
@@ -36,10 +50,47 @@ const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   },
 });
 
-const JSON_HEADERS = {
-  "Content-Type": "application/json",
-  "Access-Control-Allow-Origin": "*",
-};
+function buildCorsHeaders(
+  requestHeaders = {},
+  contentType = "application/json"
+) {
+  const requestOrigin = requestHeaders.origin || requestHeaders.Origin;
+  let origin = "*";
+
+  if (ALLOWED_ORIGINS.length) {
+    if (requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)) {
+      origin = requestOrigin;
+    } else {
+      origin = ALLOWED_ORIGINS[0];
+    }
+  } else if (requestOrigin) {
+    origin = requestOrigin;
+  }
+
+  const headers = {
+    "Content-Type": contentType,
+    "Access-Control-Allow-Headers":
+      "Content-Type,Authorization,X-Requested-With",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Origin": origin,
+    Vary: "Origin",
+  };
+
+  if (origin !== "*") {
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
+
+  return headers;
+}
+
+function normalizePath(path = "/") {
+  if (!path) return "/";
+  const parts = path.split("/").filter(Boolean);
+  if (parts.length && ["dev", "prod", "stage", "staging"].includes(parts[0])) {
+    return parts.length === 1 ? "/" : `/${parts.slice(1).join("/")}`;
+  }
+  return path.startsWith("/") ? path : `/${path}`;
+}
 
 function chunkText(text, chunkSize = 500, overlap = 50) {
   const charsPerChunk = chunkSize * 4;
@@ -140,10 +191,13 @@ async function callOpenAI(path, body, { stream = false } = {}) {
   return stream ? res : res.json();
 }
 
+const EMBEDDING_MODEL =
+  process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small";
+
 async function generateEmbeddingsBatch(texts) {
   if (!texts.length) return [];
   const payload = {
-    model: "text-embedding-3-large",
+    model: EMBEDDING_MODEL,
     input: texts.map((t) => t.slice(0, 8000)),
   };
   const response = await callOpenAI("/embeddings", payload);
@@ -175,16 +229,23 @@ async function storeInPinecone(docId, docName, chunksWithEmbeddings) {
   }
 
   await Promise.all(
-    batches.map((batch) =>
-      fetch(`https://${PINECONE_INDEX_HOST}/vectors/upsert`, {
+    batches.map(async (batch) => {
+      const res = await fetch(`https://${PINECONE_INDEX_HOST}/vectors/upsert`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Api-Key": PINECONE_API_KEY,
         },
         body: JSON.stringify({ vectors: batch }),
-      })
-    )
+      });
+
+      if (!res.ok) {
+        const details = await res.text();
+        throw new Error(
+          `Pinecone upsert failed (${res.status}): ${details.slice(0, 200)}`
+        );
+      }
+    })
   );
   return true;
 }
@@ -249,6 +310,18 @@ function buildContextText(matches) {
     .join("\n\n");
 }
 
+function formatChatHistory(chatHistory = [], limit = 6) {
+  return chatHistory
+    .slice(-limit)
+    .map((turn) => {
+      const role = turn.sender === "bot" ? "Assistant" : "User";
+      const text = typeof turn.text === "string" ? turn.text : "";
+      return `${role}: ${text.replace(/\s+/g, " ").trim()}`.slice(0, 500);
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 async function queryDynamoDocuments(userId) {
   const command = new QueryCommand({
     TableName: DOC_TABLE,
@@ -272,7 +345,29 @@ async function queryDynamoDocuments(userId) {
     created_at: item.created_at,
     content: item.content || "",
     chat_history: item.chat_history || [],
+    updated_at: item.updated_at,
+    last_message_preview: item.last_message_preview || "",
+    last_message_at: item.last_message_at,
   }));
+}
+
+async function getDocumentItem(userId, docId) {
+  const command = new GetCommand({
+    TableName: DOC_TABLE,
+    Key: {
+      pk: `USER#${userId}`,
+      sk: `DOC#${docId}`,
+    },
+  });
+  const { Item = null } = await dynamodb.send(command);
+  return Item;
+}
+
+async function getDocumentChatHistory(userId, docId) {
+  const item = await getDocumentItem(userId, docId);
+  if (!item) return [];
+  if (!Array.isArray(item.chat_history)) return [];
+  return item.chat_history.slice(-MAX_CHAT_MESSAGES);
 }
 
 async function saveDocumentRecord({
@@ -294,6 +389,10 @@ async function saveDocumentRecord({
       summary,
       questions,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      chat_history: [],
+      last_message_preview: "",
+      last_message_at: null,
     },
   });
   await dynamodb.send(command);
@@ -328,8 +427,20 @@ async function updateDocumentRecord({
     values[":summary"] = summary;
   }
   if (Array.isArray(chatHistory)) {
+    const trimmedHistory = chatHistory.slice(-MAX_CHAT_MESSAGES);
     expressions.push("#chat_history = :chat_history");
-    values[":chat_history"] = chatHistory;
+    values[":chat_history"] = trimmedHistory;
+
+    const lastTurn = trimmedHistory[trimmedHistory.length - 1];
+    expressions.push("#last_message_preview = :last_message_preview");
+    expressions.push("#last_message_at = :last_message_at");
+    values[":last_message_preview"] = lastTurn?.text
+      ? String(lastTurn.text).slice(0, 280)
+      : "";
+    values[":last_message_at"] =
+      lastTurn?.created_at ||
+      lastTurn?.timestamp ||
+      (lastTurn ? new Date().toISOString() : null);
   }
 
   expressions.push("#updated_at = :updated");
@@ -352,6 +463,8 @@ async function updateDocumentRecord({
         "#questions": "questions",
         "#chat_history": "chat_history",
         "#updated_at": "updated_at",
+        "#last_message_preview": "last_message_preview",
+        "#last_message_at": "last_message_at",
       },
       ExpressionAttributeValues: values,
     })
@@ -361,10 +474,7 @@ async function updateDocumentRecord({
 function createStream(responseStream, { statusCode = 200, headers = {} }) {
   return lambdaRuntime.HttpResponseStream.from(responseStream, {
     statusCode,
-    headers: {
-      ...JSON_HEADERS,
-      ...headers,
-    },
+    headers,
   });
 }
 
@@ -423,23 +533,42 @@ async function openAiChatWithContext({
   contextMatches,
   stream,
   responseStream,
+  respond,
+  streamHeaders,
+  chatHistoryText = "",
+  docName = "",
+  docSummary = "",
 }) {
   if (!contextMatches.length) {
-    writeJson(
-      responseStream,
-      200,
-      {
-        response:
-          "I couldn't find relevant passages in your documents. The document may not have been vectorized yet.",
-        citations: [],
-        context_used: 0,
-      }
-    );
+    respond(200, {
+      response:
+        "I couldn't find relevant passages in your documents. The document may not have been vectorized yet.",
+      citations: [],
+      context_used: 0,
+    });
     return;
   }
 
   const contextText = buildContextText(contextMatches);
   const citations = buildCitations(contextMatches);
+  const systemPromptParts = [
+    "Use ONLY EVIDENCE sections. Every factual sentence must end with [n]. If unsupported by evidence, say you can't find it in the document.",
+  ];
+  if (docName) {
+    systemPromptParts.push(`Document title: ${docName}`);
+  }
+  if (docSummary) {
+    systemPromptParts.push(
+      `Document summary (for orientation only): ${docSummary.slice(0, 600)}`
+    );
+  }
+
+  const promptSegments = [`EVIDENCE:\n${contextText}`];
+  if (chatHistoryText) {
+    promptSegments.push(`CONVERSATION HISTORY:\n${chatHistoryText}`);
+  }
+  promptSegments.push(`QUESTION: ${query}`);
+  promptSegments.push("ANSWER:");
 
   const payload = {
     model: "gpt-4o-mini",
@@ -449,23 +578,18 @@ async function openAiChatWithContext({
     messages: [
       {
         role: "system",
-        content:
-          "Use ONLY EVIDENCE sections. Every factual sentence must end with [n]. If unsupported by evidence, say you can't find it in the document.",
+        content: systemPromptParts.join("\n"),
       },
       {
         role: "user",
-        content: `EVIDENCE:\n${contextText}\n\nQUESTION: ${query}\nANSWER:`,
+        content: promptSegments.join("\n\n"),
       },
     ],
   };
 
   if (stream) {
     const httpStream = createStream(responseStream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
+      headers: streamHeaders,
     });
     await streamOpenAIResponse(payload, httpStream, citations);
     return;
@@ -475,16 +599,12 @@ async function openAiChatWithContext({
   const answer = response?.choices?.[0]?.message?.content;
 
   if (!answer) {
-    writeJson(
-      responseStream,
-      500,
-      { error: "No response from OpenAI" }
-    );
+    respond(500, { error: "No response from OpenAI" });
     return;
   }
 
   if (!/\[\d+\]/.test(answer)) {
-    writeJson(responseStream, 200, {
+    respond(200, {
       response: "I can't find support for that in the document.",
       citations: [],
       context_used: contextMatches.length,
@@ -492,7 +612,7 @@ async function openAiChatWithContext({
     return;
   }
 
-  writeJson(responseStream, 200, {
+  respond(200, {
     response: answer,
     citations,
     context_used: contextMatches.length,
@@ -550,14 +670,23 @@ export const handler = lambdaRuntime.streamifyResponse(
   async (event, responseStream) => {
     const req = parseEvent(event);
     const { method, path } = req;
+    const normalizedPath = normalizePath(path);
+    const corsJsonHeaders = buildCorsHeaders(req.headers);
+    const streamHeaders = {
+      ...buildCorsHeaders(req.headers, "text/event-stream"),
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    };
+    const respond = (status, payload, headers = corsJsonHeaders) =>
+      writeJson(responseStream, status, payload, headers);
 
     if (method === "OPTIONS") {
-      writeJson(responseStream, 200, { ok: true });
+      respond(200, { ok: true });
       return;
     }
 
-    if (method === "GET" && path === "/dev/health") {
-      writeJson(responseStream, 200, {
+    if (method === "GET" && (normalizedPath === "/health" || normalizedPath === "/dev/health")) {
+      respond(200, {
         status: "healthy",
         environment: "dev",
         rag_enabled: Boolean(PINECONE_API_KEY),
@@ -567,14 +696,14 @@ export const handler = lambdaRuntime.streamifyResponse(
       return;
     }
 
-    if (method === "POST" && path === "/dev/upload") {
+    if (method === "POST" && normalizedPath === "/upload") {
       const body = req.body || {};
       const userId = body.user_id || "guest_dev";
       const filename = body.filename;
       const content = body.content;
 
       if (!filename || !content) {
-        writeJson(responseStream, 400, {
+        respond(400, {
           error: "Missing filename or content",
         });
         return;
@@ -619,7 +748,16 @@ export const handler = lambdaRuntime.streamifyResponse(
       }
 
       if (chunksWithEmbeddings.length) {
-        await storeInPinecone(docId, filename, chunksWithEmbeddings);
+        try {
+          await storeInPinecone(docId, filename, chunksWithEmbeddings);
+        } catch (err) {
+          console.error("Pinecone store failed", err);
+          respond(502, {
+            error:
+              "Document indexing failed: Pinecone returned an error while storing embeddings.",
+          });
+          return;
+        }
       }
 
       await saveDocumentRecord({
@@ -631,7 +769,7 @@ export const handler = lambdaRuntime.streamifyResponse(
         questions: summaryData.questions,
       });
 
-      writeJson(responseStream, 200, {
+      respond(200, {
         message: "Document uploaded",
         doc_id: docId,
         artifact: {
@@ -643,30 +781,86 @@ export const handler = lambdaRuntime.streamifyResponse(
       return;
     }
 
-    if (path === "/documents" && method === "GET") {
+    if (method === "GET" && normalizedPath === "/usage") {
+      const userId = req.query?.user_id || "guest_dev";
+      const usage = {
+        chats_used: 0,
+        documents_uploaded: 0,
+      };
+      respond(200, {
+        plan: "Free",
+        usage,
+        limits: {
+          chats: Number(process.env.DEV_CHAT_LIMIT || 10),
+          documents: Number(process.env.DEV_DOC_LIMIT || 2),
+        },
+        user_id: userId,
+      });
+      return;
+    }
+
+    if (method === "GET" && normalizedPath === "/documents") {
       const userId = req.query?.user_id;
       if (!userId) {
-        writeJson(responseStream, 400, {
+        respond(400, {
           error: "Missing user_id",
         });
         return;
       }
       try {
         const documents = await queryDynamoDocuments(userId);
-        writeJson(responseStream, 200, { documents });
+        respond(200, { documents });
       } catch (err) {
         console.error("Dynamo query failed", err);
-        writeJson(responseStream, 500, { documents: [] });
+        respond(500, { documents: [] });
       }
       return;
     }
 
-    if (path === "/documents" && method === "POST") {
+    if (
+      method === "GET" &&
+      normalizedPath.startsWith("/documents/") &&
+      normalizedPath.endsWith("/chat")
+    ) {
+      const segments = normalizedPath.split("/").filter(Boolean);
+      if (segments.length !== 3) {
+        respond(404, { error: "Invalid chat path" });
+        return;
+      }
+      const docId = decodeURIComponent(segments[1]);
+      const userId = req.query?.user_id;
+      if (!userId) {
+        respond(400, { error: "Missing user_id" });
+        return;
+      }
+      try {
+        const item = await getDocumentItem(userId, docId);
+        if (!item) {
+          respond(404, { error: "Document not found" });
+          return;
+        }
+        const history = Array.isArray(item.chat_history)
+          ? item.chat_history.slice(-MAX_CHAT_MESSAGES)
+          : [];
+        respond(200, {
+          doc_id: docId,
+          chat_history: history,
+          last_message_preview: item.last_message_preview || "",
+          last_message_at: item.last_message_at || null,
+        });
+      } catch (err) {
+        console.error("Chat history fetch failed", err);
+        respond(500, { error: "Failed to load chat history" });
+      }
+      return;
+    }
+
+    if (method === "POST" && normalizedPath === "/documents") {
       const body = req.body || {};
       const userId = body.user_id;
       const docId = body.doc_id;
       if (!userId || !docId) {
-        writeJson(responseStream, 400, {
+        respond(400, {
           error: "Missing user_id or doc_id",
         });
         return;
@@ -680,11 +874,11 @@ export const handler = lambdaRuntime.streamifyResponse(
         questions: body.questions,
         chatHistory: body.chat_history,
       });
-      writeJson(responseStream, 200, { message: "Saved" });
+      respond(200, { message: "Saved" });
       return;
     }
 
-    if (method === "POST" && path === "/dev/chat") {
+    if (method === "POST" && normalizedPath === "/chat") {
       const body = req.body || {};
       const query =
         body.query ||
@@ -692,9 +886,10 @@ export const handler = lambdaRuntime.streamifyResponse(
         "";
       const stream = Boolean(body.stream);
       if (!query) {
-        writeJson(responseStream, 400, { error: "No query provided" });
+        respond(400, { error: "No query provided" });
         return;
       }
+      const userId = body.user_id || req.query?.user_id || "guest_dev";
       const intent = classifyIntent(query);
 
       if (intent === "summary" && body.docPreview) {
@@ -703,7 +898,7 @@ export const handler = lambdaRuntime.streamifyResponse(
             body.docPreview.slice(0, 12000),
             "This document"
           );
-          writeJson(responseStream, 200, {
+          respond(200, {
             response: summaryData.summary,
             previewQuestions: summaryData.questions,
             citations: [],
@@ -715,17 +910,49 @@ export const handler = lambdaRuntime.streamifyResponse(
       }
 
       const docId = body.doc_id || body.documentId;
+      let docItem = null;
+      let historySource = [];
+      if (docId && userId) {
+        try {
+          docItem = await getDocumentItem(userId, docId);
+          historySource = Array.isArray(docItem?.chat_history)
+            ? docItem.chat_history
+            : [];
+        } catch (err) {
+          console.warn("Failed to load stored chat history", err);
+        }
+      }
+      if (Array.isArray(body.chat_history) && body.chat_history.length) {
+        historySource = body.chat_history;
+      }
+      const chatHistoryText = formatChatHistory(historySource);
+
+      console.log(
+        `[chat] user=${userId} doc=${docId || "none"} history_turns=${
+          historySource.length
+        } query="${query.slice(0, 120)}"`
+      );
+
       const matches = await queryPinecone(query, docId, 8);
+      console.log(
+        `[chat] pinecone matches=${matches.length} doc=${docId || "none"}`
+      );
+
       await openAiChatWithContext({
         query,
         contextMatches: matches,
         stream,
         responseStream,
+        respond,
+        streamHeaders,
+        chatHistoryText,
+        docName: docItem?.filename || body.doc_name || "",
+        docSummary: docItem?.summary || "",
       });
       return;
     }
 
-    writeJson(responseStream, 404, { error: "Endpoint not found" });
+    respond(404, { error: "Endpoint not found" });
   }
 );
 

@@ -12,6 +12,8 @@ try:
 except:
     PyPDF2 = None
 
+from config import get_settings, make_cors_headers
+
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Decimal):
@@ -19,11 +21,20 @@ class DecimalEncoder(json.JSONEncoder):
         return super(DecimalEncoder, self).default(obj)
 
 http = urllib3.PoolManager()
-OPENAI_API_KEY = os.environ['OPENAI_API_KEY']
+settings = get_settings()
+OPENAI_API_KEY = settings.openai_api_key
+DOC_TABLE = settings.doc_table
 dynamodb = boto3.resource('dynamodb')
 secretsmanager = boto3.client('secretsmanager')
 s3 = boto3.client('s3')
 ses = boto3.client('ses', region_name='us-east-1')
+
+OPENAI_API_KEY_SECRET_NAME = os.environ.get('OPENAI_API_KEY_SECRET_NAME')
+if OPENAI_API_KEY_SECRET_NAME:
+    try:
+        OPENAI_API_KEY = secretsmanager.get_secret_value(SecretId=OPENAI_API_KEY_SECRET_NAME)['SecretString']
+    except Exception as exc:
+        print(f"⚠️ Failed to load OpenAI key from secret {OPENAI_API_KEY_SECRET_NAME}: {exc}")
 
 # Get Stripe secret key
 try:
@@ -88,13 +99,21 @@ def verify_token(token):
     except Exception as e:
         raise Exception(f'Token verification error: {str(e)}')
 
+def make_headers(request_headers=None, content_type='application/json'):
+    return make_cors_headers(
+        settings,
+        request_headers=request_headers,
+        content_type=content_type,
+        allow_headers='Content-Type,Authorization,X-Requested-With',
+        allow_methods='GET,POST,OPTIONS,DELETE,PUT',
+        add_origin_header=True,
+        vary_origin=True,
+        send_wildcard_credentials=False,
+    )
+
 def lambda_handler(event, context):
-    # CORS headers - allow all origins for flexibility
-    headers = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Requested-With',
-        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS,DELETE,PUT'
-    }
+    request_headers = event.get('headers') or {}
+    headers = make_headers(request_headers)
     
     try:
         # Handle OPTIONS preflight immediately
@@ -325,13 +344,13 @@ def lambda_handler(event, context):
             plan = body.get('plan', 'monthly')
             
             if action == 'create':
-                return create_stripe_checkout(user_id, plan)
+                return create_stripe_checkout(user_id, plan, request_headers)
             elif action == 'status':
-                return get_subscription_status(user_id)
+                return get_subscription_status(user_id, request_headers)
             elif action == 'cancel':
-                return cancel_subscription(user_id)
+                return cancel_subscription(user_id, request_headers)
             elif action == 'portal':
-                return create_billing_portal(user_id)
+                return create_billing_portal(user_id, request_headers)
         
 
         
@@ -386,7 +405,7 @@ def lambda_handler(event, context):
         
         elif path == '/usage' and method == 'GET':
             # user_id comes from verified token
-            result = get_usage_stats(user_id)
+            result = get_usage_stats(user_id, request_headers)
             return {
                 'statusCode': result['statusCode'],
                 'headers': headers,
@@ -395,7 +414,7 @@ def lambda_handler(event, context):
         
         elif path == '/documents' and method == 'GET':
             # user_id comes from verified token
-            docs_table = dynamodb.Table('docgpt')
+            docs_table = dynamodb.Table(DOC_TABLE)
             response = docs_table.query(
                 KeyConditionExpression='pk = :pk',
                 ExpressionAttributeValues={':pk': f'USER#{user_id}'}
@@ -432,7 +451,7 @@ def lambda_handler(event, context):
                     'body': json.dumps({'error': 'user_id and doc_id required'})
                 }
             
-            docs_table = dynamodb.Table('docgpt')
+            docs_table = dynamodb.Table(DOC_TABLE)
             docs_table.put_item(
                 Item={
                     'pk': f'USER#{user_id}',
@@ -455,7 +474,7 @@ def lambda_handler(event, context):
         elif path.startswith('/documents/') and method == 'DELETE':
             doc_id = path.split('/')[-1]
             # user_id comes from verified token
-            docs_table = dynamodb.Table('docgpt')
+            docs_table = dynamodb.Table(DOC_TABLE)
             docs_table.delete_item(Key={'pk': f'USER#{user_id}', 'sk': f'DOC#{doc_id}'})
             return {
                 'statusCode': 200,
@@ -500,7 +519,7 @@ def lambda_handler(event, context):
         }
 
 # DynamoDB cache for chat responses
-cache_table = dynamodb.Table('docgpt')
+cache_table = dynamodb.Table(DOC_TABLE)
 
 def openai_chat(prompt, use_mini=False, max_tokens=150):
     """OpenAI chat with DynamoDB caching and gpt-4o-mini option"""
@@ -584,12 +603,13 @@ Be BRIEF. Be HELPFUL. Be HUMAN."""
     else:
         return "Sorry, I couldn't process that request. Please try again."
 
-def create_stripe_checkout(user_id, plan='monthly'):
+def create_stripe_checkout(user_id, plan='monthly', request_headers=None):
     """Create Stripe Checkout Session"""
+    cors_headers = make_headers(request_headers)
     if not stripe_secret:
         return {
             'statusCode': 500,
-            'headers': {'Access-Control-Allow-Origin': '*'},
+            'headers': cors_headers,
             'body': json.dumps({'error': 'Stripe not configured'})
         }
     
@@ -607,10 +627,6 @@ def create_stripe_checkout(user_id, plan='monthly'):
         
         # Create Stripe Checkout Session
         url = 'https://api.stripe.com/v1/checkout/sessions'
-        headers = {
-            'Authorization': f'Bearer {stripe_secret}',
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
         
         data = {
             'mode': mode,
@@ -625,14 +641,18 @@ def create_stripe_checkout(user_id, plan='monthly'):
         
         # URL encode the data
         encoded_data = '&'.join([f'{k}={v}' for k, v in data.items()])
+        stripe_headers = {
+            'Authorization': f'Bearer {stripe_secret}',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
         
-        response = http.request('POST', url, body=encoded_data, headers=headers)
+        response = http.request('POST', url, body=encoded_data, headers=stripe_headers)
         result = json.loads(response.data.decode('utf-8'))
         
         if 'id' in result:
             return {
                 'statusCode': 200,
-                'headers': {'Access-Control-Allow-Origin': '*'},
+                'headers': cors_headers,
                 'body': json.dumps({
                     'checkout_url': result['url'],
                     'session_id': result['id']
@@ -641,18 +661,19 @@ def create_stripe_checkout(user_id, plan='monthly'):
         else:
             return {
                 'statusCode': 400,
-                'headers': {'Access-Control-Allow-Origin': '*'},
+                'headers': cors_headers,
                 'body': json.dumps({'error': result.get('error', {}).get('message', 'Checkout failed')})
             }
     except Exception as e:
         return {
             'statusCode': 500,
-            'headers': {'Access-Control-Allow-Origin': '*'},
+            'headers': cors_headers,
             'body': json.dumps({'error': str(e)})
         }
 
 def handle_stripe_webhook(event):
     """Handle Stripe webhook events with signature verification"""
+    cors_headers = make_headers(event.get('headers'))
     try:
         body = event.get('body', '')
         sig_header = event.get('headers', {}).get('stripe-signature') or event.get('headers', {}).get('Stripe-Signature', '')
@@ -685,7 +706,7 @@ def handle_stripe_webhook(event):
                 if expected_sig not in signatures:
                     return {
                         'statusCode': 401,
-                        'headers': {'Access-Control-Allow-Origin': '*'},
+                        'headers': cors_headers,
                         'body': json.dumps({'error': 'Invalid signature'})
                     }
                 
@@ -694,13 +715,13 @@ def handle_stripe_webhook(event):
                 if abs(current_time - int(timestamp)) > 300:  # 5 minutes
                     return {
                         'statusCode': 401,
-                        'headers': {'Access-Control-Allow-Origin': '*'},
+                        'headers': cors_headers,
                         'body': json.dumps({'error': 'Timestamp too old'})
                     }
             except Exception as e:
                 return {
                     'statusCode': 401,
-                    'headers': {'Access-Control-Allow-Origin': '*'},
+                    'headers': cors_headers,
                     'body': json.dumps({'error': f'Signature verification failed: {str(e)}'})
                 }
         
@@ -746,22 +767,23 @@ def handle_stripe_webhook(event):
         
         return {
             'statusCode': 200,
-            'headers': {'Access-Control-Allow-Origin': '*'},
+            'headers': cors_headers,
             'body': json.dumps({'received': True})
         }
     except Exception as e:
         return {
             'statusCode': 400,
-            'headers': {'Access-Control-Allow-Origin': '*'},
+            'headers': cors_headers,
             'body': json.dumps({'error': str(e)})
         }
 
-def create_billing_portal(user_id):
+def create_billing_portal(user_id, request_headers=None):
     """Create Stripe Billing Portal session"""
+    cors_headers = make_headers(request_headers)
     if not stripe_secret:
         return {
             'statusCode': 500,
-            'headers': {'Access-Control-Allow-Origin': '*'},
+            'headers': cors_headers,
             'body': json.dumps({'error': 'Stripe not configured'})
         }
     
@@ -772,7 +794,7 @@ def create_billing_portal(user_id):
         if 'Item' not in response:
             return {
                 'statusCode': 404,
-                'headers': {'Access-Control-Allow-Origin': '*'},
+                'headers': cors_headers,
                 'body': json.dumps({'error': 'No subscription found'})
             }
         
@@ -782,7 +804,7 @@ def create_billing_portal(user_id):
         if customer_id in ['owner_account', 'lifetime', 'admin']:
             return {
                 'statusCode': 200,
-                'headers': {'Access-Control-Allow-Origin': '*'},
+                'headers': cors_headers,
                 'body': json.dumps({
                     'message': 'Lifetime account - no billing to manage',
                     'is_lifetime': True
@@ -802,34 +824,39 @@ def create_billing_portal(user_id):
         }
         
         encoded_data = '&'.join([f'{k}={v}' for k, v in data.items()])
-        stripe_response = http.request('POST', url, body=encoded_data, headers=headers)
+        stripe_headers = {
+            'Authorization': f'Bearer {stripe_secret}',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        stripe_response = http.request('POST', url, body=encoded_data, headers=stripe_headers)
         result = json.loads(stripe_response.data.decode('utf-8'))
         
         if 'url' in result:
             return {
                 'statusCode': 200,
-                'headers': {'Access-Control-Allow-Origin': '*'},
+                'headers': cors_headers,
                 'body': json.dumps({'portal_url': result['url']})
             }
         else:
             return {
                 'statusCode': 400,
-                'headers': {'Access-Control-Allow-Origin': '*'},
+                'headers': cors_headers,
                 'body': json.dumps({'error': result.get('error', {}).get('message', 'Portal creation failed')})
             }
     except Exception as e:
         return {
             'statusCode': 500,
-            'headers': {'Access-Control-Allow-Origin': '*'},
+            'headers': cors_headers,
             'body': json.dumps({'error': str(e)})
         }
 
-def cancel_subscription(user_id):
+def cancel_subscription(user_id, request_headers=None):
     """Cancel user subscription"""
+    cors_headers = make_headers(request_headers)
     if not stripe_secret:
         return {
             'statusCode': 500,
-            'headers': {'Access-Control-Allow-Origin': '*'},
+            'headers': cors_headers,
             'body': json.dumps({'error': 'Stripe not configured'})
         }
     
@@ -840,7 +867,7 @@ def cancel_subscription(user_id):
         if 'Item' not in response:
             return {
                 'statusCode': 404,
-                'headers': {'Access-Control-Allow-Origin': '*'},
+                'headers': cors_headers,
                 'body': json.dumps({'error': 'No subscription found'})
             }
         
@@ -848,12 +875,12 @@ def cancel_subscription(user_id):
         
         # Cancel in Stripe
         url = f'https://api.stripe.com/v1/subscriptions/{subscription_id}'
-        headers = {
+        stripe_headers = {
             'Authorization': f'Bearer {stripe_secret}',
             'Content-Type': 'application/x-www-form-urlencoded'
         }
         
-        stripe_response = http.request('DELETE', url, headers=headers)
+        stripe_response = http.request('DELETE', url, headers=stripe_headers)
         
         # Update DynamoDB
         subscriptions_table.update_item(
@@ -868,18 +895,19 @@ def cancel_subscription(user_id):
         
         return {
             'statusCode': 200,
-            'headers': {'Access-Control-Allow-Origin': '*'},
+            'headers': cors_headers,
             'body': json.dumps({'status': 'canceled'})
         }
     except Exception as e:
         return {
             'statusCode': 500,
-            'headers': {'Access-Control-Allow-Origin': '*'},
+            'headers': cors_headers,
             'body': json.dumps({'error': str(e)})
         }
 
-def get_subscription_status(user_id):
+def get_subscription_status(user_id, request_headers=None):
     """Get user subscription status"""
+    cors_headers = make_headers(request_headers)
     try:
         subscriptions_table = dynamodb.Table('documentgpt-subscriptions')
         response = subscriptions_table.get_item(Key={'user_id': user_id})
@@ -887,6 +915,7 @@ def get_subscription_status(user_id):
         if 'Item' in response:
             return {
                 'statusCode': 200,
+                'headers': cors_headers,
                 'body': json.dumps({
                     'plan': response['Item'].get('plan', 'free'),
                     'status': response['Item'].get('status', 'inactive')
@@ -895,13 +924,15 @@ def get_subscription_status(user_id):
         else:
             return {
                 'statusCode': 200,
+                'headers': cors_headers,
                 'body': json.dumps({'plan': 'free', 'status': 'active'})
             }
     except Exception as e:
-        return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+        return {'statusCode': 500, 'headers': cors_headers, 'body': json.dumps({'error': str(e)})}
 
-def get_usage_stats(user_id):
+def get_usage_stats(user_id, request_headers=None):
     """Get user usage statistics"""
+    cors_headers = make_headers(request_headers)
     try:
         usage_table = dynamodb.Table('documentgpt-usage')
         response = usage_table.get_item(Key={'user_id': user_id})
@@ -912,7 +943,7 @@ def get_usage_stats(user_id):
             usage = {'chats_used': 0, 'documents_uploaded': 0, 'agents_used': 0}
         
         # Get subscription to determine limits
-        sub_response = get_subscription_status(user_id)
+        sub_response = get_subscription_status(user_id, request_headers)
         sub_data = json.loads(sub_response['body'])
         plan = sub_data.get('plan', 'free')
         
@@ -924,6 +955,7 @@ def get_usage_stats(user_id):
         
         return {
             'statusCode': 200,
+            'headers': cors_headers,
             'body': json.dumps({
                 'usage': usage,
                 'limits': limits.get(plan, limits['free']),
@@ -931,7 +963,7 @@ def get_usage_stats(user_id):
             }, cls=DecimalEncoder)
         }
     except Exception as e:
-        return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+        return {'statusCode': 500, 'headers': cors_headers, 'body': json.dumps({'error': str(e)})}
 
 def check_usage_limit(user_id, usage_type):
     """Check if user has exceeded usage limits"""
@@ -1038,7 +1070,7 @@ def track_usage(user_id, usage_type):
 def save_document(user_id, filename, content):
     """Save document to DynamoDB"""
     doc_id = f"doc_{int(datetime.now().timestamp())}"
-    docs_table = dynamodb.Table('docgpt')
+    docs_table = dynamodb.Table(DOC_TABLE)
     docs_table.put_item(
         Item={
             'pk': f"USER#{user_id}",

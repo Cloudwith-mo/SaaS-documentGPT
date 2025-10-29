@@ -30,6 +30,48 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Update Lambda environment variables
+        env:
+          BEDROCK_REGION: ${{ secrets.BEDROCK_REGION }}
+          NOVA_EMBEDDING_MODEL: ${{ secrets.NOVA_EMBEDDING_MODEL }}
+          NOVA_ACCESS_ROLE_ARN: ${{ secrets.NOVA_ACCESS_ROLE_ARN }}
+          DEFAULT_MODEL_ID: ${{ secrets.DEFAULT_MODEL_ID }}
+          MEDIA_BUCKET: ${{ secrets.MEDIA_BUCKET }}
+          MEDIA_QUEUE_URL: ${{ secrets.MEDIA_QUEUE_URL }}
+        run: |
+          if [ -z "${BEDROCK_REGION}${NOVA_EMBEDDING_MODEL}${NOVA_ACCESS_ROLE_ARN}${DEFAULT_MODEL_ID}${MEDIA_BUCKET}${MEDIA_QUEUE_URL}" ]; then
+            echo "No environment variables provided for update; skipping."
+            exit 0
+          fi
+          CURRENT=$(aws lambda get-function-configuration \
+            --function-name ${{ env.LAMBDA_FUNCTION }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Environment.Variables' \
+            --output json)
+          if [ -z "$CURRENT" ] || [ "$CURRENT" = "null" ]; then
+            CURRENT='{}'
+          fi
+          UPDATED=$(echo "$CURRENT" | jq \
+            --arg br "$BEDROCK_REGION" \
+            --arg nem "$NOVA_EMBEDDING_MODEL" \
+            --arg nar "$NOVA_ACCESS_ROLE_ARN" \
+            --arg dmid "$DEFAULT_MODEL_ID" \
+            --arg mb "$MEDIA_BUCKET" \
+            --arg mqu "$MEDIA_QUEUE_URL" \
+            '
+            if $br != "" then .BEDROCK_REGION = $br else . end |
+            if $nem != "" then .NOVA_EMBEDDING_MODEL = $nem else . end |
+            if $nar != "" then .NOVA_ACCESS_ROLE_ARN = $nar else . end |
+            if $dmid != "" then .DEFAULT_MODEL_ID = $dmid else . end |
+            if $mb != "" then .MEDIA_BUCKET = $mb else . end |
+            if $mqu != "" then .MEDIA_QUEUE_URL = $mqu else . end
+            ')
+          UPDATED_COMPACT=$(echo "$UPDATED" | jq -c '.')
+          aws lambda update-function-configuration \
+            --function-name ${{ env.LAMBDA_FUNCTION }} \
+            --region ${{ env.AWS_REGION }} \
+            --environment "Variables=$UPDATED_COMPACT"
       
       - name: Build and push Docker image
         id: build-image

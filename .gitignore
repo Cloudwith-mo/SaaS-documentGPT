@@ -11,6 +11,7 @@ aws-credentials.json
 *.pyc
 __pycache__/
 .pytest_cache/
+lambda/package/
 
 # IDE files
 .vscode/

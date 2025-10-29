@@ -71,7 +71,7 @@ jobs:
           aws lambda update-function-configuration \
             --function-name ${{ env.LAMBDA_FUNCTION }} \
             --region ${{ env.AWS_REGION }} \
-            --environment "Variables=$UPDATED_COMPACT"
+            --environment '{"Variables":'"$UPDATED_COMPACT"'}'
       
       - name: Build and push Docker image
         id: build-image

@@ -56,9 +56,7 @@ echo ""
 echo "Test 5: Web Search Test - Latest AI news"
 curl -s -X POST "${API_URL}/dev/chat" \
   -H "Content-Type: application/json" \
-  -d '{
-    \"query\": \"What is the latest news about GPT-4?\"
-  }' | jq '.'
+  -d '{"query": "What is the latest news about GPT-4?"}' | jq '.'
 echo ""
 
 echo "✅ All tests complete!"

@@ -1,9 +1,11 @@
 FROM public.ecr.aws/lambda/python:3.9
 
+WORKDIR ${LAMBDA_TASK_ROOT}
+
 # Install dependencies
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt -t .
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy handler
 COPY dev_handler.py .

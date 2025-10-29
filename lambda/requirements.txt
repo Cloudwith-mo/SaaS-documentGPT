@@ -6,6 +6,7 @@ langgraph>=0.0.46
 langchain-openai>=0.3.0
 langchain-pinecone>=0.2.0
 langchain-core>=0.3.0
+langchain>=0.3.0
 duckduckgo-search>=8.0.0
 pinecone-client>=2.2.4
 urllib3<1.27,>=1.25.4

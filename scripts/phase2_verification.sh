@@ -148,7 +148,7 @@ flow_tagging() {
       env PYTHONPATH=lambda python3 -m pytest lambda/tests/test_weekly_digest.py -q
   else
     info "Skipping weekly digest pytest (lambda/tests/test_weekly_digest.py missing)"
-  }
+  fi
 }
 
 measure_flow() {

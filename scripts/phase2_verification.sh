@@ -107,7 +107,7 @@ flow_voice() {
     run_node "Frontend regression (voice memo + batch upload UI)" npm test --silent
   else
     info "Skipping frontend smoke (node-dev absent)"
-  }
+  fi
 }
 
 flow_cowriter() {
@@ -122,7 +122,7 @@ flow_cowriter() {
       ./scripts/test-cowriter.sh
   else
     info "Skipping shell co-writer smoke (scripts/test-cowriter.sh missing)"
-  }
+  fi
 }
 
 flow_tagging() {

@@ -11,14 +11,16 @@ info() {
 
 # Ensure pytest is available; bail fast if deps missing
 if ! python3 - <<'PY' >/dev/null 2>&1
+import importlib
+import sys
 try:
-    import pytest  # noqa: F401
+    importlib.import_module("pytest")
 except ModuleNotFoundError:
-    raise SystemExit(1)
+    sys.exit(1)
 PY
 then
-  echo "⚠️ pytest is required. Install dependencies first (see lambda/dev_requirements.txt)."
-  exit 1
+  info "Installing pytest for verification harness"
+  python3 -m pip install --quiet pytest
 fi
 
 run_root() { info "$1"; shift; (cd "$ROOT_DIR" && "$@"); }

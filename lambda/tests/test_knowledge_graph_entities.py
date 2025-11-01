@@ -1,0 +1,91 @@
+import math
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
+from knowledge_graph import (  # noqa: E402
+    Entity,
+    consolidate_entities,
+    entities_to_document_payload,
+    parse_entity_payload,
+    run_entity_extraction,
+)
+
+
+class StubLLM:
+    def __init__(self, content: str):
+        self._content = content
+        self.calls = []
+
+    def invoke(self, messages, **kwargs):
+        self.calls.append({"messages": messages, "kwargs": kwargs})
+
+        class _Response:
+            def __init__(self, content: str):
+                self.content = content
+
+        return _Response(self._content)
+
+
+def test_parse_entity_payload_strips_wrapping_text():
+    payload = """
+    Sure, here you go:
+    {
+      "entities": [
+        {"name": "Ada Lovelace", "type": "Person", "salience": 0.92, "mentions": ["Ada pioneered"]},
+        {"name": "Babbage Engine", "type": "Project", "salience": 0.61}
+      ]
+    }
+    Thanks!
+    """
+
+    entities = parse_entity_payload(payload)
+    assert len(entities) == 2
+    assert entities[0]["name"] == "Ada Lovelace"
+    assert entities[1]["type"] == "Project"
+
+
+def test_consolidate_entities_merges_duplicates():
+    raw_entities = [
+        {"name": "DocumentGPT", "type": "ORG", "salience": 0.6, "mentions": ["DocumentGPT shipped."]},
+        {"name": "DocumentGPT", "type": "Organization", "salience": 0.8, "mentions": ["DocumentGPT released"]},
+        {"name": "SaaS documentGPT", "type": "ORG", "salience": 0.5},
+    ]
+
+    consolidated = consolidate_entities(raw_entities)
+    assert len(consolidated) == 2
+    docgpt = next(entity for entity in consolidated if entity.name == "DocumentGPT")
+    assert math.isclose(docgpt.salience, 0.8)
+    assert "DocumentGPT shipped." in docgpt.mentions
+    assert "DocumentGPT released" in docgpt.mentions
+
+
+def test_run_entity_extraction_uses_llm_stub():
+    response = '{"entities": [{"name": "Graph DB", "type": "Project", "salience": 0.7, "mentions": ["Graph DB buildout"]}]}'
+    llm = StubLLM(response)
+
+    entities = run_entity_extraction("Working on the graph DB buildout", llm)
+    assert len(entities) == 1
+    assert isinstance(entities[0], Entity)
+    assert entities[0].name == "Graph DB"
+    assert entities[0].type == "PROJECT"
+    assert entities[0].mentions == ["Graph DB buildout"]
+
+
+@pytest.mark.parametrize(
+    "entities",
+    [
+        [],
+        [Entity(entity_id="project-graph-db", name="Graph DB", type="PROJECT", salience=0.75, mentions=["A note"])],
+    ],
+)
+def test_entities_to_document_payload_structure(entities):
+    payload = entities_to_document_payload(entities)
+    assert isinstance(payload, list)
+    for entry in payload:
+        assert set(entry.keys()) == {"entity_id", "name", "type", "salience", "mentions"}
+        assert isinstance(entry["entity_id"], str)
+        assert isinstance(entry["salience"], float)

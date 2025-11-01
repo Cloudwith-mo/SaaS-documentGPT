@@ -1,6 +1,6 @@
 # DocumentGPT North Star Execution Plan
 
-_Last updated: 1 Nov 2025 · 00:47 UTC_
+_Last updated: 1 Nov 2025 · 01:05 UTC_
 
 This tracker converts the migration roadmap into actionable, sequential tasks. Update statuses as you progress. Each epic is broken into weekly work packets sized for a single engineer.
 
@@ -94,7 +94,7 @@ Legend: ☐ todo · ☐⚙ in progress · ☑ done
 4. ☐ Rule-based predictive insights (trend extrapolation).
 
 ### Epic 2 · Personal Knowledge Graph
-1. ☐⚙ Entity extraction pipeline (NER + storage schema).
+1. ☑ Entity extraction pipeline (NER + storage schema).
 2. ☐ Auto-link entities in entry renderer (hover → reference list).
 3. ☐ Build entity ↔ entry relationship queries.
 4. ☐ Graph visualization (D3 or equivalent) MVP.

@@ -20,6 +20,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from agents import DEFAULT_RESEARCH_SYSTEM_PROMPT, build_langgraph_agent, web_search
 from config import get_settings, make_cors_headers
+from knowledge_graph import entities_to_document_payload, run_entity_extraction
 
 # Environment
 settings = get_settings()
@@ -98,7 +99,9 @@ text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=15
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Decimal):
-            return int(obj)
+            if obj == obj.to_integral_value():
+                return int(obj)
+            return float(obj)
         return super().default(obj)
 
 def make_headers(content_type='application/json', request_headers=None):
@@ -174,8 +177,76 @@ def generate_summary(text, doc_name):
         response = llm.invoke(prompt)
         return response.content
     except Exception as e:
-        print(f"⚠️ Summary generation failed: {e}")
-        return f"Document {doc_name} uploaded successfully."
+            print(f"⚠️ Summary generation failed: {e}")
+            return f"Document {doc_name} uploaded successfully."
+
+
+def _prepare_doc_entities(raw_entities):
+    """Convert entity payload ready for DynamoDB storage."""
+    doc_entities = []
+    for entity in raw_entities:
+        doc_entities.append(
+            {
+                'entity_id': entity['entity_id'],
+                'name': entity['name'],
+                'type': entity['type'],
+                'salience': Decimal(str(entity['salience'])),
+                'mentions': entity.get('mentions', []),
+            }
+        )
+    return doc_entities
+
+
+def _upsert_knowledge_graph(table, user_id, doc_id, doc_entities):
+    """Persist entity aggregates and document edges for the knowledge graph."""
+    if not doc_entities:
+        return
+
+    now_iso = datetime.now().isoformat()
+    for entity in doc_entities:
+        user_pk = f'USER#{user_id}'
+        entity_sk = f'ENTITY#{entity["entity_id"]}'
+        key = {'pk': user_pk, 'sk': entity_sk}
+
+        existing_resp = table.get_item(Key=key)
+        existing = existing_resp.get('Item') if isinstance(existing_resp, dict) else None
+        doc_ids = set(existing.get('doc_ids', [])) if existing else set()
+        doc_ids.add(doc_id)
+
+        mentions = existing.get('mentions', []) if existing else []
+        for mention in entity.get('mentions', []):
+            if mention and mention not in mentions and len(mentions) < 10:
+                mentions.append(mention)
+
+        created_at = existing.get('created_at') if existing else now_iso
+
+        table.put_item(Item={
+            'pk': user_pk,
+            'sk': entity_sk,
+            'entity_id': entity['entity_id'],
+            'entity_name': entity['name'],
+            'entity_type': entity['type'],
+            'doc_ids': sorted(doc_ids),
+            'doc_count': Decimal(str(len(doc_ids))),
+            'mentions': mentions,
+            'salience': entity['salience'],
+            'created_at': created_at,
+            'updated_at': now_iso,
+            'last_seen_doc_id': doc_id,
+        })
+
+        table.put_item(Item={
+            'pk': f'DOC#{doc_id}',
+            'sk': f'ENTITY#{entity["entity_id"]}',
+            'doc_id': doc_id,
+            'entity_id': entity['entity_id'],
+            'entity_name': entity['name'],
+            'entity_type': entity['type'],
+            'salience': entity['salience'],
+            'mentions': entity.get('mentions', []),
+            'user_id': user_id,
+            'updated_at': now_iso,
+        })
 
 def lambda_handler(event, context):
     """Main Lambda handler"""
@@ -362,6 +433,17 @@ def lambda_handler(event, context):
             summary = generate_summary(content, filename)
             print("🧠 Summary generated", flush=True)
 
+            print("🕸️ Extracting entities for knowledge graph", flush=True)
+            doc_entities = []
+            try:
+                extracted_entities = run_entity_extraction(content, llm)
+                entity_payload = entities_to_document_payload(extracted_entities)
+                doc_entities = _prepare_doc_entities(entity_payload)
+                print(f"🕸️ Identified {len(doc_entities)} entities", flush=True)
+            except Exception as entity_error:  # noqa: BLE001
+                print(f"⚠️ Entity extraction failed: {entity_error}")
+                doc_entities = []
+
             questions = [
                 f"What are the main topics in {filename}?",
                 "Can you summarize the key findings?",
@@ -380,9 +462,16 @@ def lambda_handler(event, context):
                 'summary': summary,
                 'questions': questions,
                 'processing_status': 'ready',
-                'created_at': datetime.now().isoformat()
+                'created_at': datetime.now().isoformat(),
+                'entities': doc_entities,
+                'knowledge_graph_state': 'indexed' if doc_entities else 'no_entities',
             })
             print("🗄️  DynamoDB write complete", flush=True)
+
+            try:
+                _upsert_knowledge_graph(docs_table, user_id, doc_id, doc_entities)
+            except Exception as kg_error:  # noqa: BLE001
+                print(f"⚠️ Knowledge graph persistence failed: {kg_error}")
 
             return {
                 'statusCode': 200,
@@ -532,7 +621,9 @@ def lambda_handler(event, context):
                 'filename': item.get('filename'),
                 'summary': item.get('summary', ''),
                 'questions': item.get('questions', []),
-                'created_at': item.get('created_at')
+                'created_at': item.get('created_at'),
+                'entities': item.get('entities', []),
+                'knowledge_graph_state': item.get('knowledge_graph_state', 'unknown'),
             } for item in resp.get('Items', [])]
             
             return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'documents': documents}, cls=DecimalEncoder)}

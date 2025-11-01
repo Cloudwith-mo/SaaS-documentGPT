@@ -12,7 +12,8 @@ import json
 import re
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, Iterable, List, Sequence
+from itertools import combinations
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 ALLOWED_ENTITY_TYPES = {
     "PERSON",
@@ -329,7 +330,11 @@ def format_entity_detail(entity_item: Dict, document_items: Sequence[Dict]) -> D
                 "doc_id": doc.get("doc_id"),
                 "title": doc.get("filename"),
                 "summary": doc.get("summary"),
+                "questions": doc.get("questions") or [],
+                "media_type": doc.get("media_type"),
                 "created_at": doc.get("created_at"),
+                "updated_at": doc.get("updated_at"),
+                "highlights": doc.get("highlights") or [],
             }
         )
 
@@ -345,3 +350,47 @@ def format_entity_detail(entity_item: Dict, document_items: Sequence[Dict]) -> D
         },
         "documents": documents,
     }
+
+
+def compute_doc_relationships(entity_items: Sequence[Dict]) -> Tuple[List[Dict], Dict[str, int]]:
+    """Build document-to-document relationship summaries from raw entity items."""
+
+    relationship_map: Dict[Tuple[str, str], Dict[str, object]] = {}
+    doc_touch_counts: Dict[str, int] = {}
+
+    for item in entity_items:
+        doc_ids = item.get("doc_ids") or []
+        if not doc_ids:
+            continue
+
+        unique_doc_ids = sorted(set(doc_ids))
+        if not unique_doc_ids:
+            continue
+
+        for doc_id in unique_doc_ids:
+            doc_touch_counts[doc_id] = doc_touch_counts.get(doc_id, 0) + 1
+
+        if len(unique_doc_ids) < 2:
+            continue
+
+        entity_name = item.get("entity_name") or item.get("name") or item.get("entity_id")
+        for source_id, target_id in combinations(unique_doc_ids, 2):
+            key = (source_id, target_id)
+            entry = relationship_map.setdefault(
+                key,
+                {
+                    "source": source_id,
+                    "target": target_id,
+                    "weight": 0,
+                    "shared_entities": [],
+                },
+            )
+            entry["weight"] = int(entry.get("weight", 0)) + 1
+            if entity_name and entity_name not in entry["shared_entities"]:
+                entry["shared_entities"].append(entity_name)
+
+    relationships = sorted(
+        relationship_map.values(),
+        key=lambda rel: (-int(rel["weight"]), f"{rel['source']}->{rel['target']}")
+    )
+    return relationships, doc_touch_counts

@@ -9,6 +9,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from knowledge_graph import (  # noqa: E402
     Entity,
+    compute_doc_relationships,
     consolidate_entities,
     entities_to_document_payload,
     format_document_entities,
@@ -129,11 +130,43 @@ def test_format_entity_detail_combines_documents():
         "updated_at": "2025-11-01T00:00:00Z",
     }
     documents = [
-        {"doc_id": "doc_alpha", "filename": "Alpha Doc", "summary": "Summary A", "created_at": "2025-10-10T00:00:00Z"},
-        {"doc_id": "doc_beta", "filename": "Beta Doc", "summary": "Summary B", "created_at": "2025-10-11T00:00:00Z"},
+        {"doc_id": "doc_alpha", "filename": "Alpha Doc", "summary": "Summary A", "created_at": "2025-10-10T00:00:00Z", "updated_at": "2025-10-11T00:00:00Z", "questions": ["Q1"], "media_type": "text/plain", "highlights": [{"id": "hl-1", "text": "Snippet"}]},
+        {"doc_id": "doc_beta", "filename": "Beta Doc", "summary": "Summary B", "created_at": "2025-10-11T00:00:00Z", "updated_at": "2025-10-12T00:00:00Z", "questions": [], "media_type": "text/plain", "highlights": []},
     ]
 
     detail = format_entity_detail(entity, documents)
     assert detail["entity"]["name"] == "Project X"
     assert detail["entity"]["doc_count"] == 2
     assert len(detail["documents"]) == 2
+    first_doc = detail["documents"][0]
+    assert first_doc["questions"] == ["Q1"]
+    assert first_doc["media_type"] == "text/plain"
+    assert first_doc["highlights"] == [{"id": "hl-1", "text": "Snippet"}]
+    assert first_doc["updated_at"] == "2025-10-11T00:00:00Z"
+
+
+def test_compute_doc_relationships_accumulates_shared_entities():
+    entity_items = [
+        {
+            "entity_id": "project-alpha",
+            "entity_name": "Project Alpha",
+            "doc_ids": ["doc-1", "doc-2", "doc-3"],
+        },
+        {
+            "entity_id": "project-beta",
+            "entity_name": "Project Beta",
+            "doc_ids": ["doc-2", "doc-3"],
+        },
+        {
+            "entity_id": "solo",
+            "doc_ids": ["doc-4"],
+        },
+    ]
+
+    relationships, doc_counts = compute_doc_relationships(entity_items)
+
+    assert doc_counts == {"doc-1": 1, "doc-2": 2, "doc-3": 2, "doc-4": 1}
+    assert relationships
+    pair = next(rel for rel in relationships if rel["source"] == "doc-2" and rel["target"] == "doc-3")
+    assert pair["weight"] == 2
+    assert set(pair["shared_entities"]) == {"Project Alpha", "Project Beta"}

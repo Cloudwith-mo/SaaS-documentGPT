@@ -5,10 +5,14 @@ import base64
 import json
 import mimetypes
 import os
+import re
 import traceback
-from datetime import datetime
+import uuid
+from collections import Counter, defaultdict
+from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Optional
+from statistics import mean
+from typing import Optional, Sequence, Tuple
 
 import boto3
 
@@ -22,6 +26,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from agents import DEFAULT_RESEARCH_SYSTEM_PROMPT, build_langgraph_agent, web_search
 from config import get_settings, make_cors_headers
 from knowledge_graph import (
+    compute_doc_relationships,
     entities_to_document_payload,
     format_document_entities,
     format_entity_detail,
@@ -38,6 +43,7 @@ PINECONE_INDEX_HOST = settings.pinecone_index_host
 DOC_TABLE = settings.doc_table
 MEDIA_BUCKET = settings.media_bucket
 MEDIA_QUEUE_URL = settings.media_queue_url
+WIKI_MAX_SECTIONS = 12
 
 # Ensure Pinecone cache can write inside Lambda /tmp filesystem
 os.environ["HOME"] = "/tmp"
@@ -184,8 +190,215 @@ def generate_summary(text, doc_name):
         response = llm.invoke(prompt)
         return response.content
     except Exception as e:
-            print(f"⚠️ Summary generation failed: {e}")
-            return f"Document {doc_name} uploaded successfully."
+        print(f"⚠️ Summary generation failed: {e}")
+        return f"Document {doc_name} uploaded successfully."
+
+
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+HIGHLIGHT_KEYWORDS = {
+    "action": {"review", "schedule", "follow-up", "deadline", "email", "meet", "deliver", "plan", "todo", "decide"},
+    "date": {"today", "tomorrow", "week", "month", "quarter", "january", "february", "march", "april", "may", "june",
+             "july", "august", "september", "october", "november", "december", "monday", "tuesday", "wednesday",
+             "thursday", "friday", "saturday", "sunday", "deadline", "due", "by "},
+}
+
+POSITIVE_WORDS = {
+    "accomplished", "amazing", "awesome", "calm", "confident", "excited", "grateful", "great", "happy", "hopeful",
+    "optimistic", "proud", "relaxed", "renewed", "satisfied", "strong", "successful", "thrilled", "victory", "win",
+}
+NEGATIVE_WORDS = {
+    "angry", "anxious", "awful", "burnout", "concerned", "depressed", "doubt", "exhausted", "frustrated", "lost",
+    "nervous", "overwhelmed", "sad", "stressed", "tired", "uncertain", "upset", "worried",
+}
+EMOTION_KEYWORDS = {
+    "joy": {"grateful", "happy", "joy", "excited", "delighted", "pleased"},
+    "anger": {"angry", "frustrated", "mad", "irritated"},
+    "sadness": {"sad", "down", "depressed", "unhappy"},
+    "fear": {"scared", "afraid", "worried", "anxious"},
+    "surprise": {"surprised", "shocked", "amazed"},
+}
+STOPWORDS = {
+    "the", "and", "or", "with", "about", "your", "from", "into", "that", "this", "have", "been", "will", "for", "are",
+    "was", "were", "been", "being", "after", "before", "when", "while", "over", "under", "again", "today", "yesterday",
+    "tomorrow", "project", "tasks", "task", "note", "notes",
+}
+
+ANALYTICS_TTL_HOURS = 6
+
+
+def generate_highlights(text: str, max_count: int = 12) -> list[dict]:
+    """Generate structured highlight snippets from document text without additional LLM calls."""
+    if not text:
+        return []
+
+    normalized = text.replace("\r\n", "\n").strip()
+    if not normalized:
+        return []
+
+    segments = SENTENCE_SPLIT_RE.split(normalized)
+    highlights = []
+    cursor = 0
+    max_length = len(normalized)
+
+    for segment in segments:
+        raw = segment.strip()
+        if not raw:
+            cursor += len(segment) + 1
+            continue
+
+        start_idx = normalized.find(segment, cursor)
+        if start_idx == -1:
+            start_idx = cursor
+        cursor = start_idx + len(segment)
+
+        length = len(raw)
+        if length < 40 or length > 320:
+            continue
+
+        lower = raw.lower()
+        keyword_hits = {kind for kind, keywords in HIGHLIGHT_KEYWORDS.items()
+                        if any(keyword in lower for keyword in keywords)}
+        kind = "key"
+        if "action" in keyword_hits:
+            kind = "action"
+        elif "date" in keyword_hits:
+            kind = "important"
+
+        density_score = min(1.0, length / 180)
+        punctuation_bonus = 0.25 if ":" in raw or ";" in raw else 0.0
+        keyword_bonus = min(0.35, len(keyword_hits) * 0.2)
+        capital_bonus = 0.1 if raw[:1].isupper() else 0.0
+        score = density_score + punctuation_bonus + keyword_bonus + capital_bonus
+
+        context_start = max(0, start_idx - 80)
+        context_end = min(max_length, start_idx + length + 80)
+        context_snippet = normalized[context_start:context_end].strip()
+
+        highlights.append({
+            "id": f"hl-{uuid.uuid4().hex[:8]}",
+            "text": raw,
+            "kind": kind,
+            "offset": start_idx,
+            "length": length,
+            "score": round(score, 4),
+            "context": context_snippet,
+        })
+
+    if not highlights:
+        return []
+
+    highlights.sort(key=lambda h: h["score"], reverse=True)
+    seen = set()
+    deduped = []
+    for highlight in highlights:
+        key = highlight["text"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(highlight)
+        if len(deduped) >= max_count:
+            break
+
+    return deduped
+
+
+def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(tz=None)
+    except Exception:
+        return None
+
+
+def _tokenize(text: str) -> list[str]:
+    tokens = re.findall(r"[A-Za-z][A-Za-z\-']+", text.lower())
+    return [tok for tok in tokens if tok not in STOPWORDS and len(tok) > 2]
+
+
+def _extract_topics(item: dict) -> list[str]:
+    topics: list[str] = []
+    entities = item.get("entities") or []
+    for entity in entities:
+        name = entity.get("name")
+        if name and isinstance(name, str):
+            topics.append(name.strip())
+    if not topics:
+        summary = item.get("summary") or item.get("content") or ""
+        counts = Counter(_tokenize(summary))
+        topics = [word.title() for word, _ in counts.most_common(5)]
+    return topics[:5]
+
+
+def _estimate_sentiment(text: str) -> tuple[float, str]:
+    if not text:
+        return 0.0, "neutral"
+    lowered = text.lower()
+    tokens = _tokenize(lowered)
+    if not tokens:
+        return 0.0, "neutral"
+    pos_hits = sum(1 for token in tokens if token in POSITIVE_WORDS)
+    neg_hits = sum(1 for token in tokens if token in NEGATIVE_WORDS)
+    score = (pos_hits - neg_hits) / max(1, pos_hits + neg_hits)
+    if pos_hits == neg_hits == 0:
+        score = 0.0
+    dominant_emotion = "neutral"
+    max_emotion_hits = 0
+    for emotion, keywords in EMOTION_KEYWORDS.items():
+        hits = sum(1 for token in tokens if token in keywords)
+        if hits > max_emotion_hits:
+            max_emotion_hits = hits
+            dominant_emotion = emotion
+    if max_emotion_hits == 0:
+        dominant_emotion = "joy" if score > 0.4 else "sadness" if score < -0.4 else "neutral"
+    return round(score, 4), dominant_emotion
+
+
+def _moving_average(series: Sequence[float], window: int = 7) -> list[Optional[float]]:
+    results: list[Optional[float]] = []
+    values: list[float] = []
+    for idx, value in enumerate(series):
+        values.append(value)
+        start = max(0, idx - window + 1)
+        window_slice = values[start : idx + 1]
+        try:
+            avg = mean(window_slice)
+            results.append(round(avg, 4))
+        except Exception:
+            results.append(None)
+    return results
+
+
+def _generate_predictive_insights(sentiment_ma: list[Optional[float]], velocity_points: list[dict], topics_by_month: list[dict]) -> list[str]:
+    insights: list[str] = []
+    if sentiment_ma:
+        latest = next((val for val in reversed(sentiment_ma) if val is not None), None)
+        earlier = next((val for val in reversed(sentiment_ma[:-7]) if val is not None), None)
+        if latest is not None and earlier is not None:
+            delta = latest - earlier
+            if delta <= -0.15:
+                insights.append("Sentiment has trended downward over the past week. Consider reviewing recent stressors.")
+            elif delta >= 0.15:
+                insights.append("Sentiment is improving week-over-week. Keep reinforcing the habits that are working.")
+    if velocity_points:
+        recent_words = sum(point["words"] for point in velocity_points[-7:])
+        prior_words = sum(point["words"] for point in velocity_points[-14:-7])
+        if prior_words and recent_words < prior_words * 0.7:
+            insights.append("Writing velocity dropped more than 30% this week. A gentle reminder to journal could help.")
+        elif prior_words and recent_words > prior_words * 1.2:
+            insights.append("Writing output increased significantly this week. Capture that momentum with structured goals.")
+    if topics_by_month:
+        last_month = topics_by_month[-1]
+        if len(topics_by_month) >= 2:
+            prev_month = topics_by_month[-2]
+            last_topics = {topic["topic"] for topic in last_month["topics"]}
+            prev_topics = {topic["topic"] for topic in prev_month["topics"]}
+            new_topics = last_topics - prev_topics
+            if new_topics:
+                insights.append(f"New focus areas emerging: {', '.join(sorted(new_topics))}. Explore whether they align with your goals.")
+    if not insights:
+        insights.append("Keep journaling consistently to uncover deeper trends.")
+    return insights[:4]
 
 
 def _prepare_doc_entities(raw_entities):
@@ -290,6 +503,281 @@ def _get_entity_detail_payload(table, user_id, entity_id):
     doc_items = _fetch_document_metadata(table, user_id, doc_ids)
     return format_entity_detail(entity_item, doc_items)
 
+
+def _decimal_or_none(value: Optional[float]):
+    if value is None:
+        return None
+    try:
+        return Decimal(str(round(value, 6)))
+    except Exception:
+        return None
+
+
+def _build_week_key(date_obj: datetime) -> str:
+    iso_year, iso_week, _ = date_obj.isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
+
+
+def _compute_temporal_analytics(table, user_id: str, force: bool = False):
+    analytics_key = {'pk': f'USER#{user_id}', 'sk': 'ANALYTICS#TEMPORAL'}
+    existing_resp = table.get_item(Key=analytics_key)
+    existing_item = existing_resp.get('Item') if isinstance(existing_resp, dict) else None
+    if existing_item and not force:
+        generated_at = _parse_datetime(existing_item.get('generated_at'))
+        if generated_at and datetime.now().astimezone(tz=None) - generated_at < timedelta(hours=ANALYTICS_TTL_HOURS):
+            payload = existing_item.get('payload')
+            if isinstance(payload, str):
+                try:
+                    data = json.loads(payload)
+                    data['generated_at'] = existing_item.get('generated_at')
+                    return data
+                except json.JSONDecodeError:
+                    pass
+
+    docs_resp = table.query(
+        KeyConditionExpression=Key('pk').eq(f'USER#{user_id}') & Key('sk').begins_with('DOC#')
+    )
+    documents = docs_resp.get('Items', [])
+
+    monthly_topics_counter: dict[str, Counter] = defaultdict(Counter)
+    daily_stats: dict[datetime, dict] = {}
+
+    for item in documents:
+        created_at = _parse_datetime(item.get('created_at') or item.get('updated_at'))
+        if not created_at:
+            continue
+        month_key = created_at.strftime("%Y-%m")
+        for topic in _extract_topics(item):
+            monthly_topics_counter[month_key][topic] += 1
+
+        content = item.get('content') or item.get('summary') or ''
+        sentiment, emotion = _estimate_sentiment(content)
+        word_count = len(_tokenize(content))
+        day_key = created_at.replace(hour=0, minute=0, second=0, microsecond=0)
+        stats = daily_stats.setdefault(day_key, {"sentiments": [], "emotions": Counter(), "words": 0, "entries": 0})
+        stats["sentiments"].append(sentiment)
+        stats["emotions"][emotion] += 1
+        stats["words"] += word_count
+        stats["entries"] += 1
+
+    monthly_topics = []
+    for month in sorted(monthly_topics_counter.keys()):
+        counter = monthly_topics_counter[month]
+        top_topics = [{"topic": topic, "count": int(count)} for topic, count in counter.most_common(5)]
+        monthly_topics.append({"month": month, "topics": top_topics})
+
+    timeline = []
+    sorted_days = sorted(daily_stats.keys())
+    for day in sorted_days:
+        data = daily_stats[day]
+        avg_sentiment = mean(data["sentiments"]) if data["sentiments"] else 0.0
+        dominant_emotion = data["emotions"].most_common(1)[0][0] if data["emotions"] else "neutral"
+        timeline.append({
+            "date": day.date().isoformat(),
+            "sentiment": round(avg_sentiment, 4),
+            "emotion": dominant_emotion,
+            "words": data["words"],
+        })
+    moving_average_values = _moving_average([point["sentiment"] for point in timeline], window=7) if timeline else []
+    for point, ma_value in zip(timeline, moving_average_values):
+        point["moving_average"] = ma_value
+
+    weekly_totals: dict[str, int] = defaultdict(int)
+    for day in sorted_days:
+        week_key = _build_week_key(day)
+        weekly_totals[week_key] += daily_stats[day]["words"]
+    weekly_velocity = [{"week": week, "words": words} for week, words in sorted(weekly_totals.items())]
+
+    streak = 0
+    best_streak = 0
+    last_day = None
+    for day in sorted_days:
+        if daily_stats[day]["words"] > 0:
+            if last_day and (day - last_day).days == 1:
+                streak += 1
+            else:
+                streak = 1
+            best_streak = max(best_streak, streak)
+        else:
+            streak = 0
+        last_day = day
+
+    words_last_7_days = sum(daily_stats[day]["words"] for day in sorted_days if (sorted_days[-1] - day).days < 7) if sorted_days else 0
+    words_prev_7_days = sum(
+        daily_stats[day]["words"]
+        for day in sorted_days
+        if 7 <= (sorted_days[-1] - day).days < 14
+    ) if len(sorted_days) > 7 else 0
+
+    insights = _generate_predictive_insights(moving_average_values, [{"words": daily_stats[day]["words"]} for day in sorted_days], monthly_topics)
+
+    payload = {
+        'user_id': user_id,
+        'generated_at': datetime.now().astimezone(tz=None).isoformat(),
+        'monthly_topics': monthly_topics,
+        'sentiment_timeline': timeline,
+        'velocity': {
+            'daily_average_words': round(mean(point["words"] for point in timeline), 2) if timeline else 0,
+            'weekly_totals': weekly_velocity,
+            'streak_days': best_streak,
+            'words_last_7_days': words_last_7_days,
+            'words_prev_7_days': words_prev_7_days,
+        },
+        'insights': insights,
+    }
+
+    table.put_item(Item={
+        'pk': f'USER#{user_id}',
+        'sk': 'ANALYTICS#TEMPORAL',
+        'user_id': user_id,
+        'generated_at': payload['generated_at'],
+        'payload': json.dumps(payload),
+    })
+    return payload
+
+
+def _list_wiki_pages(table, user_id: str):
+    resp = table.query(
+        KeyConditionExpression=Key('pk').eq(f'USER#{user_id}') & Key('sk').begins_with('WIKI#')
+    )
+    return resp.get('Items', [])
+
+
+def _get_wiki_page(table, user_id: str, page_id: str):
+    resp = table.get_item(Key={'pk': f'USER#{user_id}', 'sk': f'WIKI#{page_id}'})
+    return resp.get('Item') if isinstance(resp, dict) else None
+
+
+def _sanitize_sections(sections: Sequence[dict]) -> Tuple[list, list]:
+    cleaned = []
+    errors = []
+    for idx, section in enumerate(sections or []):
+        section_id = section.get('id') or f"section-{idx+1}"
+        title = (section.get('title') or '').strip()
+        content = (section.get('content') or '').strip()
+        if not title and not content:
+            continue
+        if len(title) > 200:
+            title = title[:200]
+            errors.append(f"Section {section_id} title truncated")
+        if len(content) > 15000:
+            content = content[:15000]
+            errors.append(f"Section {section_id} content truncated")
+        cleaned.append({
+            'id': section_id,
+            'title': title or 'Untitled',
+            'content': content,
+            'last_modified': section.get('last_modified') or datetime.now().astimezone(tz=None).isoformat(),
+        })
+        if len(cleaned) >= WIKI_MAX_SECTIONS:
+            break
+    return cleaned, errors
+
+
+def _wiki_sections_to_markdown(title: str, sections: Sequence[dict]) -> str:
+    parts = [f"# {title.strip() or 'Untitled Wiki'}"]
+    for section in sections or []:
+        section_title = section.get('title', '').strip() or 'Untitled'
+        content = section.get('content', '')
+        parts.append(f"\n## {section_title}\n\n{content}")
+    return "\n".join(parts).strip() + "\n"
+
+
+def _generate_wiki_sections(user_id: str, entity_id: Optional[str], docs_table):
+    documents: list[dict] = []
+    if entity_id:
+        entity_resp = docs_table.get_item(Key={'pk': f'USER#{user_id}', 'sk': f'ENTITY#{entity_id}'})
+        entity_item = entity_resp.get('Item') if isinstance(entity_resp, dict) else None
+        doc_ids = entity_item.get('doc_ids', []) if entity_item else []
+        if doc_ids:
+            documents = _fetch_document_metadata(docs_table, user_id, doc_ids)
+    if not documents:
+        docs_resp = docs_table.query(
+            KeyConditionExpression=Key('pk').eq(f'USER#{user_id}') & Key('sk').begins_with('DOC#')
+        )
+        documents = docs_resp.get('Items', [])
+    documents = sorted(documents, key=lambda item: item.get('updated_at') or item.get('created_at') or '', reverse=True)
+    analytics = _compute_temporal_analytics(docs_table, user_id, force=False)
+    insights = analytics.get('insights', [])
+    topics = analytics.get('monthly_topics', [])
+    timeline = analytics.get('sentiment_timeline', [])
+    now_iso = datetime.now().astimezone(tz=None).isoformat()
+    overview_content = []
+    for doc in documents[:3]:
+        summary = doc.get('summary') or (doc.get('content') or '')[:400]
+        filename = doc.get('filename') or doc.get('doc_id')
+        overview_content.append(f"- **{filename}**: {summary}")
+    if not overview_content:
+        overview_content.append("- No linked documents yet. Start by attaching key notes or uploads.")
+    sections = [
+        {
+            'id': 'overview',
+            'title': 'Overview',
+            'content': "\n".join(overview_content),
+            'last_modified': now_iso,
+        }
+    ]
+    if topics:
+        latest_topics = topics[-2:] if len(topics) >= 2 else topics
+        topic_lines = []
+        for month in latest_topics:
+            month_name = month.get('month', 'Recent')
+            month_topics = ", ".join(f"{entry['topic']} ({entry['count']})" for entry in month.get('topics', [])[:5])
+            topic_lines.append(f"- **{month_name}**: {month_topics or 'No topics yet'}")
+        sections.append({
+            'id': 'topics',
+            'title': 'Trending Topics',
+            'content': "\n".join(topic_lines),
+            'last_modified': now_iso,
+        })
+    if insights:
+        sections.append({
+            'id': 'insights',
+            'title': 'Insights & Next Steps',
+            'content': "\n".join(f"- {insight}" for insight in insights),
+            'last_modified': now_iso,
+        })
+    if timeline:
+        sentiment_lines = []
+        recent = timeline[-7:]
+        for point in recent:
+            sentiment_lines.append(f"- {point['date']}: sentiment {point['sentiment']:+.2f}, emotion {point['emotion']}, {point['words']} words")
+        sections.append({
+            'id': 'timeline',
+            'title': 'Recent Sentiment Timeline',
+            'content': "\n".join(sentiment_lines) or 'No recent entries.',
+            'last_modified': now_iso,
+        })
+    return sections[:WIKI_MAX_SECTIONS]
+
+
+def _save_wiki_page(table, user_id: str, page_id: str, title: str, entity_id: Optional[str], sections: list, version: Optional[int]):
+    existing = _get_wiki_page(table, user_id, page_id)
+    if existing:
+        existing_version = existing.get('version', 1)
+        if version is None or version != existing_version:
+            raise ValueError("version_conflict")
+        new_version = existing_version + 1
+        created_at = existing.get('created_at')
+    else:
+        new_version = 1
+        created_at = datetime.now().astimezone(tz=None).isoformat()
+    updated_at = datetime.now().astimezone(tz=None).isoformat()
+    item = {
+        'pk': f'USER#{user_id}',
+        'sk': f'WIKI#{page_id}',
+        'page_id': page_id,
+        'title': title or 'Untitled Wiki',
+        'entity_id': entity_id,
+        'sections': sections,
+        'version': new_version,
+        'updated_at': updated_at,
+        'created_at': created_at,
+        'section_count': len(sections),
+    }
+    table.put_item(Item=item)
+    return item
+
 def lambda_handler(event, context):
     """Main Lambda handler"""
     request_headers = event.get('headers', {})
@@ -362,6 +850,7 @@ def lambda_handler(event, context):
                 'content': item.get('content', ''),
                 'media_type': item.get('media_type'),
                 'entities': item.get('entities', []),
+                'highlights': item.get('highlights', []),
                 'processing_status': item.get('processing_status'),
                 'created_at': item.get('created_at'),
                 'updated_at': item.get('updated_at'),
@@ -386,7 +875,51 @@ def lambda_handler(event, context):
 
             docs_table = dynamodb.Table(DOC_TABLE)
             try:
-                entities = _list_user_entities(docs_table, user_id)
+                entity_resp = docs_table.query(
+                    KeyConditionExpression=Key('pk').eq(f'USER#{user_id}') & Key('sk').begins_with('ENTITY#')
+                )
+                entity_items = entity_resp.get('Items', [])
+                entities = format_user_entities(entity_items)
+                doc_relationships, doc_touch_counts = compute_doc_relationships(entity_items)
+                doc_ids = set()
+                for item in entity_items:
+                    for doc_id in item.get('doc_ids', []) or []:
+                        doc_ids.add(doc_id)
+                for rel in doc_relationships:
+                    doc_ids.add(rel['source'])
+                    doc_ids.add(rel['target'])
+                doc_items = _fetch_document_metadata(docs_table, user_id, list(doc_ids)) if doc_ids else []
+                doc_metadata = {}
+                now = datetime.now().astimezone(tz=None)
+                for doc in doc_items:
+                    doc_id = doc.get('doc_id')
+                    if not doc_id:
+                        continue
+                    updated_at = doc.get('updated_at') or doc.get('created_at')
+                    updated_dt = _parse_datetime(updated_at)
+                    recency_score = 0.3
+                    if updated_dt:
+                        age_days = max(0, (now - updated_dt).total_seconds() / (60 * 60 * 24))
+                        recency_score = max(0.0, 1 - min(age_days, 150) / 150)
+                    content_source = doc.get('content') or doc.get('summary') or ''
+                    sentiment_score, emotion = _estimate_sentiment(content_source)
+                    doc_metadata[doc_id] = {
+                        'title': doc.get('filename') or doc_id,
+                        'summary': doc.get('summary') or '',
+                        'created_at': doc.get('created_at'),
+                        'updated_at': doc.get('updated_at'),
+                        'recency_score': recency_score,
+                        'sentiment_score': sentiment_score,
+                        'emotion': emotion,
+                        'word_count': len(_tokenize(content_source)),
+                        'entity_count': doc_touch_counts.get(doc_id, 0),
+                    }
+                payload = {
+                    'user_id': user_id,
+                    'entities': entities,
+                    'doc_relationships': doc_relationships,
+                    'doc_metadata': doc_metadata,
+                }
             except Exception as graph_error:  # noqa: BLE001
                 print(f"⚠️ Knowledge graph list failed: {graph_error}")
                 return {
@@ -398,7 +931,7 @@ def lambda_handler(event, context):
             return {
                 'statusCode': 200,
                 'headers': headers,
-                'body': json.dumps({'user_id': user_id, 'entities': entities}, cls=DecimalEncoder)
+                'body': json.dumps(payload, cls=DecimalEncoder)
             }
 
         if path.startswith('/dev/knowledge-graph/entities/') and method == 'GET':
@@ -460,6 +993,184 @@ def lambda_handler(event, context):
                 'statusCode': 200,
                 'headers': headers,
                 'body': json.dumps({'doc_id': doc_id, 'entities': entities}, cls=DecimalEncoder)
+            }
+
+        if path == '/dev/wiki' and method == 'GET':
+            user_id = query_params.get('user_id') or query_params.get('userId')
+            if not user_id:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Missing user_id'})
+                }
+            docs_table = dynamodb.Table(DOC_TABLE)
+            try:
+                pages = _list_wiki_pages(docs_table, user_id)
+            except Exception as wiki_error:  # noqa: BLE001
+                print(f"⚠️ Wiki list failed: {wiki_error}")
+                return {
+                    'statusCode': 500,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Unable to load wiki pages'})
+                }
+            response = []
+            for page in pages or []:
+                response.append({
+                    'page_id': page.get('page_id'),
+                    'title': page.get('title'),
+                    'entity_id': page.get('entity_id'),
+                    'updated_at': page.get('updated_at'),
+                    'created_at': page.get('created_at'),
+                    'version': page.get('version', 1),
+                    'section_count': page.get('section_count', len(page.get('sections', []))),
+                })
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps({'pages': response}, cls=DecimalEncoder)
+            }
+
+        if path.startswith('/dev/wiki/') and method == 'GET' and not path.endswith('/export'):
+            user_id = query_params.get('user_id') or query_params.get('userId')
+            entity_id = query_params.get('entity_id') or query_params.get('entityId')
+            auto_create = (query_params.get('auto_create') == 'true')
+            page_id = path.rstrip('/').split('/')[3]
+            if not user_id:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Missing user_id'})
+                }
+            docs_table = dynamodb.Table(DOC_TABLE)
+            page_item = _get_wiki_page(docs_table, user_id, page_id)
+            if not page_item and auto_create:
+                sections = _generate_wiki_sections(user_id, entity_id, docs_table)
+                cleaned_sections, _ = _sanitize_sections(sections)
+                page_item = _save_wiki_page(docs_table, user_id, page_id, entity_id or page_id.replace('-', ' ').title(), entity_id, cleaned_sections, version=None)
+            if not page_item:
+                return {
+                    'statusCode': 404,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Wiki page not found'})
+                }
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps(page_item, cls=DecimalEncoder)
+            }
+
+        if path.startswith('/dev/wiki/') and path.endswith('/export') and method == 'GET':
+            user_id = query_params.get('user_id') or query_params.get('userId')
+            if not user_id:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Missing user_id'})
+                }
+            page_id = path.rstrip('/').split('/')[3]
+            docs_table = dynamodb.Table(DOC_TABLE)
+            page_item = _get_wiki_page(docs_table, user_id, page_id)
+            if not page_item:
+                return {
+                    'statusCode': 404,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Wiki page not found'})
+                }
+            markdown = _wiki_sections_to_markdown(page_item.get('title') or 'Untitled Wiki', page_item.get('sections') or [])
+            return {
+                'statusCode': 200,
+                'headers': {**headers, 'Content-Type': 'text/markdown; charset=utf-8'},
+                'body': markdown
+            }
+
+        if path == '/dev/wiki' and method in ('POST', 'PUT'):
+            body = json.loads(event.get('body') or '{}')
+            user_id = body.get('user_id') or query_params.get('user_id')
+            entity_id = body.get('entity_id')
+            page_id = body.get('page_id') or (entity_id or f'wiki-{uuid.uuid4().hex[:8]}')
+            title = body.get('title') or (entity_id.replace('-', ' ').title() if entity_id else 'Untitled Wiki')
+            auto_generate = body.get('auto_generate') is True
+            sections_payload = body.get('sections') or []
+            version = body.get('version')
+            if not user_id:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Missing user_id'})
+                }
+            docs_table = dynamodb.Table(DOC_TABLE)
+            if auto_generate:
+                sections_payload = _generate_wiki_sections(user_id, entity_id, docs_table)
+                version = None
+            cleaned_sections, cleaning_errors = _sanitize_sections(sections_payload)
+            try:
+                page_item = _save_wiki_page(docs_table, user_id, page_id, title, entity_id, cleaned_sections, version)
+            except ValueError as version_error:
+                if str(version_error) == 'version_conflict':
+                    latest = _get_wiki_page(docs_table, user_id, page_id)
+                    return {
+                        'statusCode': 409,
+                        'headers': headers,
+                        'body': json.dumps({'error': 'Version conflict', 'page': latest}, cls=DecimalEncoder)
+                    }
+                raise
+            response_body = {'page': page_item}
+            if cleaning_errors:
+                response_body['warnings'] = cleaning_errors
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps(response_body, cls=DecimalEncoder)
+            }
+
+        if path == '/dev/analytics/temporal' and method == 'GET':
+            user_id = query_params.get('user_id') or query_params.get('userId')
+            force = query_params.get('force') == 'true'
+            if not user_id:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Missing user_id'})
+                }
+            docs_table = dynamodb.Table(DOC_TABLE)
+            try:
+                analytics = _compute_temporal_analytics(docs_table, user_id, force=force)
+            except Exception as analytics_error:  # noqa: BLE001
+                print(f"⚠️ Temporal analytics failed: {analytics_error}")
+                return {
+                    'statusCode': 500,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Unable to compute temporal analytics'})
+                }
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps(analytics, cls=DecimalEncoder)
+            }
+
+        if path == '/dev/analytics/temporal/rebuild' and method == 'POST':
+            body = json.loads(event.get('body') or '{}')
+            user_id = body.get('user_id') or query_params.get('user_id')
+            if not user_id:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Missing user_id'})
+                }
+            docs_table = dynamodb.Table(DOC_TABLE)
+            try:
+                analytics = _compute_temporal_analytics(docs_table, user_id, force=True)
+            except Exception as analytics_error:  # noqa: BLE001
+                print(f"⚠️ Temporal analytics rebuild failed: {analytics_error}")
+                return {
+                    'statusCode': 500,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Unable to rebuild temporal analytics'})
+                }
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps({'status': 'recomputed', 'analytics': analytics}, cls=DecimalEncoder)
             }
 
         # Upload endpoint
@@ -613,6 +1324,9 @@ def lambda_handler(event, context):
             summary = generate_summary(content, filename)
             print("🧠 Summary generated", flush=True)
 
+            doc_highlights = generate_highlights(content)
+            print(f"🖍️ Generated {len(doc_highlights)} highlights", flush=True)
+
             print("🕸️ Extracting entities for knowledge graph", flush=True)
             doc_entities = []
             try:
@@ -641,6 +1355,7 @@ def lambda_handler(event, context):
                 'content': content[:50000],
                 'summary': summary,
                 'questions': questions,
+                'highlights': doc_highlights,
                 'processing_status': 'ready',
                 'created_at': datetime.now().isoformat(),
                 'entities': doc_entities,
@@ -661,7 +1376,8 @@ def lambda_handler(event, context):
                     'doc_id': doc_id,
                     'artifact': {
                         'summary': summary,
-                        'questions': questions
+                        'questions': questions,
+                        'highlights': doc_highlights,
                     }
                 })
             }

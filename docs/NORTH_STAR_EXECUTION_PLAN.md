@@ -1,6 +1,6 @@
 # DocumentGPT North Star Execution Plan
 
-_Last updated: 1 Nov 2025 · 01:32 UTC_
+_Last updated: 1 Nov 2025 · 05:12 UTC_
 
 This tracker converts the migration roadmap into actionable, sequential tasks. Update statuses as you progress. Each epic is broken into weekly work packets sized for a single engineer.
 
@@ -87,23 +87,25 @@ Legend: ☐ todo · ☐⚙ in progress · ☑ done
 
 ## Phase 3 · Advanced Intelligence & Knowledge Graph (Weeks 19–30)
 
+**Verification**: Run `bash scripts/phase3_verification.sh` (requires `.venv` activated) to validate analytics, knowledge graph, and wiki flows.
+
 ### Epic 1 · Temporal Analysis Tools
-1. ☐ Monthly topic frequency job + chart.
-2. ☐ Enhanced sentiment/emotion classifier + moving averages.
-3. ☐ Writing velocity metrics + visualizations.
-4. ☐ Rule-based predictive insights (trend extrapolation).
+1. ☑ Monthly topic frequency job + chart.
+2. ☑ Enhanced sentiment/emotion classifier + moving averages.
+3. ☑ Writing velocity metrics + visualizations.
+4. ☑ Rule-based predictive insights (trend extrapolation).
 
 ### Epic 2 · Personal Knowledge Graph
 1. ☑ Entity extraction pipeline (NER + storage schema).
 2. ☑ Auto-link entities in entry renderer (hover → reference list).
 3. ☑ Build entity ↔ entry relationship queries.
-4. ☐⚙ Graph visualization (D3 or equivalent) MVP.
+4. ☑ Graph visualization (D3 or equivalent) MVP.
 
 ### Epic 3 · AI Life Wiki
-1. ☐ Wiki page generation prompts + storage format.
-2. ☐ User edit support with merge-safe sections.
-3. ☐ Wiki browser UI + entity/search navigation.
-4. ☐ Markdown/Notion export tooling.
+1. ☑ Wiki page generation prompts + storage format.
+2. ☑ User edit support with merge-safe sections.
+3. ☑ Wiki browser UI + entity/search navigation.
+4. ☑ Markdown/Notion export tooling.
 
 ---
 

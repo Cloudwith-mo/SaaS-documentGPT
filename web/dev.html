@@ -663,6 +663,13 @@
             background: rgba(16,185,129,0.15);
             color: #047857;
         }
+        .kg-node-faded circle {
+            fill-opacity: 0.2 !important;
+            stroke-opacity: 0.2 !important;
+        }
+        .kg-node-faded text {
+            opacity: 0.35 !important;
+        }
         #knowledgeGraphOverlay {
             position: fixed;
             inset: 0;
@@ -957,6 +964,13 @@
                         <div>
                             <div class="text-[11px] font-semibold text-emerald-600 mb-1">Appears in</div>
                             <div id="entityDetailDocs" class="space-y-2"></div>
+                        </div>
+                        <div id="entityWikiActions" class="flex items-center justify-between text-[11px] hidden">
+                            <div class="text-gray-500">Build knowledge wiki from this entity.</div>
+                            <div class="flex items-center gap-2">
+                                <button id="openEntityWikiBtn" class="px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">Open Wiki</button>
+                                <button id="refreshEntityWikiBtn" class="px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">↻</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1333,7 +1347,9 @@ function loadState() {
             if (!parsed.docInsights) parsed.docInsights = parsed.docInsights || {};
             if (!parsed.docHighlights) parsed.docHighlights = parsed.docHighlights || {};
             if (!parsed.chatHistory) parsed.chatHistory = parsed.chatHistory || {};
-            if (!parsed.knowledgeGraph) parsed.knowledgeGraph = {entities: [], lastFetched: 0, loading: false};
+            if (!parsed.knowledgeGraph) parsed.knowledgeGraph = {entities: [], docRelationships: [], docMeta: {}, lastFetched: 0, loading: false};
+            if (!parsed.knowledgeGraph.docRelationships) parsed.knowledgeGraph.docRelationships = [];
+            if (!parsed.knowledgeGraph.docMeta) parsed.knowledgeGraph.docMeta = {};
             if (!parsed.entityDetailCache) parsed.entityDetailCache = {};
             if (!parsed.userHighlights) parsed.userHighlights = parsed.userHighlights || {};
             if (!parsed.docCache) parsed.docCache = {};
@@ -1341,6 +1357,10 @@ function loadState() {
             if (!parsed.ui) parsed.ui = {knowledgeGraphCollapsed: false};
             if (parsed.ui.knowledgeGraphCollapsed === undefined) parsed.ui.knowledgeGraphCollapsed = false;
             if (parsed.activeEntityId === undefined) parsed.activeEntityId = null;
+            if (!parsed.knowledgeGraphFilters) parsed.knowledgeGraphFilters = {...defaultGraphFilters};
+            if (!parsed.temporalAnalytics) parsed.temporalAnalytics = {data: null, lastFetched: 0, loading: false, error: null};
+            if (!parsed.wikiCache) parsed.wikiCache = {};
+            if (!parsed.wikiMeta) parsed.wikiMeta = {pages: [], lastFetched: 0};
             return parsed;
         } catch (e) {
             console.error('Failed to parse saved state:', e);
@@ -1359,11 +1379,17 @@ function loadState() {
         docInsights: {},
         docHighlights: {},
         chatHistory: {},
-        knowledgeGraph: {entities: [], lastFetched: 0, loading: false},
+        knowledgeGraph: {entities: [], docRelationships: [], docMeta: {}, lastFetched: 0, loading: false},
         entityDetailCache: {},
         userHighlights: {},
+        docCache: {},
+        docFetchMeta: {},
         ui: {knowledgeGraphCollapsed: false},
-        activeEntityId: null
+        knowledgeGraphFilters: {...defaultGraphFilters},
+        activeEntityId: null,
+        temporalAnalytics: {data: null, lastFetched: 0, loading: false, error: null},
+        wikiCache: {},
+        wikiMeta: {pages: [], lastFetched: 0}
     };
 }
 
@@ -1458,6 +1484,7 @@ async function loadCloudDocs() {
                         created_at: d.created_at,
                         updated_at: d.updated_at,
                         entities: d.entities || [],
+                        highlights: d.highlights || [],
                         media_type: d.media_type
                     };
                 });
@@ -1691,6 +1718,12 @@ async function loadUsage() {
 function render() {
     const doc = state.docs.find(d => d.id === state.activeId);
     if (!doc) return;
+    if (state.user && !state.user.isGuest) {
+        fetchTemporalAnalytics();
+    } else {
+        state.temporalAnalytics = {data: null, lastFetched: 0, loading: false, error: null};
+        renderTemporalAnalyticsInsights();
+    }
     const editor = document.getElementById('editor');
     editor.innerHTML = doc.content;
     
@@ -1808,29 +1841,37 @@ function render() {
     const insights = state.docInsights[state.activeId];
     const highlights = state.docHighlights[state.activeId];
     
-    if (insights) {
-        const content = document.getElementById('insightsContent');
+    const insightsContentEl = document.getElementById('insightsContent');
+    if (insightsContentEl) {
         let html = '';
-        if (insights.keyPoints && insights.keyPoints.length > 0) {
-            html += '<div><div class="font-bold text-emerald-600 mb-1">💡 Key Points</div><ul class="list-disc ml-4 space-y-1">';
-            insights.keyPoints.forEach(p => html += `<li>${p}</li>`);
-            html += '</ul></div>';
+        if (insights) {
+            if (insights.keyPoints && insights.keyPoints.length > 0) {
+                html += '<div><div class="font-bold text-emerald-600 mb-1">💡 Key Points</div><ul class="list-disc ml-4 space-y-1">';
+                insights.keyPoints.forEach(p => html += `<li>${p}</li>`);
+                html += '</ul></div>';
+            }
+            if (insights.actionItems && insights.actionItems.length > 0) {
+                html += '<div><div class="font-bold text-cyan-600 mb-1">✅ Action Items</div><ul class="list-disc ml-4 space-y-1">';
+                insights.actionItems.forEach(a => html += `<li>${a}</li>`);
+                html += '</ul></div>';
+            }
+            if (insights.questions && insights.questions.length > 0) {
+                html += '<div><div class="font-bold text-purple-600 mb-1">❓ Questions</div><ul class="list-disc ml-4 space-y-1">';
+                insights.questions.forEach(q => html += `<li>${q}</li>`);
+                html += '</ul></div>';
+            }
+        } else {
+            html += '<div class="text-xs text-gray-500">No document insights yet. Keep writing to unlock AI summaries.</div>';
         }
-        if (insights.actionItems && insights.actionItems.length > 0) {
-            html += '<div><div class="font-bold text-cyan-600 mb-1">✅ Action Items</div><ul class="list-disc ml-4 space-y-1">';
-            insights.actionItems.forEach(a => html += `<li>${a}</li>`);
-            html += '</ul></div>';
-        }
-        if (insights.questions && insights.questions.length > 0) {
-            html += '<div><div class="font-bold text-purple-600 mb-1">❓ Questions</div><ul class="list-disc ml-4 space-y-1">';
-            insights.questions.forEach(q => html += `<li>${q}</li>`);
-            html += '</ul></div>';
-        }
-        content.innerHTML = html;
+        html += '<div id="temporalAnalyticsSection" class="mt-4 space-y-2"></div>';
+        insightsContentEl.innerHTML = html;
+        renderTemporalAnalyticsInsights();
     }
     
+    const focusHighlight = pendingHighlight && pendingHighlight.docId === state.activeId ? pendingHighlight : null;
     if (highlights && highlights.length > 0) {
-        setTimeout(() => applySmartHighlights(highlights), 100);
+        setTimeout(() => applySmartHighlights(highlights, {focus: focusHighlight}), 100);
+        if (focusHighlight) pendingHighlight = null;
     } else {
         document.getElementById('highlightNav').classList.add('hidden');
     }
@@ -1920,8 +1961,20 @@ function updateStats() {
 
 const KG_CACHE_TTL = 5 * 60 * 1000;
 const KG_DETAIL_TTL = 2 * 60 * 1000;
+const TEMPORAL_CACHE_TTL = 5 * 60 * 1000;
+const WIKI_CACHE_TTL = 3 * 60 * 1000;
 const docEntityFetchLocks = {};
 const docFetchLocks = {};
+const defaultGraphFilters = {
+    search: '',
+    minLinks: 1,
+    includeEntities: true,
+    includeDocs: true,
+    includeDocConnections: true,
+    minSharedEntities: 1,
+    recentOnly: false,
+};
+let graphSearchDebounce = null;
 
 function escapeHtmlAttr(value) {
     return (value || '').replace(/["'\\<>]/g, c => ({'"': '&quot;', "'": '&#39;', '<': '&lt;', '>': '&gt;', '\\': '&#92;'}[c] || c));
@@ -2015,6 +2068,7 @@ function renderDocEntities(doc, {loading = false} = {}) {
 function applyEntityLinks(doc, entities) {
     const editor = document.getElementById('editor');
     if (!editor) return;
+    const docId = doc.backendId || doc.id;
 
     // Clear previous links
     editor.querySelectorAll('.entity-inline').forEach(span => {
@@ -2031,11 +2085,24 @@ function applyEntityLinks(doc, entities) {
         nodes.push(walker.currentNode);
     }
 
+    const docHighlights = getDocHighlights(docId);
+
     const linkedEntities = new Set();
 
     entities.forEach(entity => {
         if (linkedEntities.has(entity.entity_id)) return;
-        const candidates = [...(entity.mentions || []), entity.name].filter(Boolean);
+        const mentions = [...(entity.mentions || []), entity.name].filter(Boolean);
+        const lowerMentions = mentions.map(m => String(m).toLowerCase());
+        const highlightCandidates = docHighlights
+            .filter(hl => {
+                const text = (hl.text || '').trim();
+                if (!text) return false;
+                const lower = text.toLowerCase();
+                return lowerMentions.some(m => m && lower.includes(m));
+            })
+            .map(hl => hl.text)
+            .filter(Boolean);
+        const candidates = [...highlightCandidates, ...mentions].filter(Boolean);
         for (const phrase of candidates) {
             const trimmed = (phrase || '').trim();
             if (!trimmed || trimmed.length > 200) continue;
@@ -2113,7 +2180,7 @@ async function fetchUserEntities(force = false) {
     }
     if (state.knowledgeGraph?.loading) return;
 
-    if (!state.knowledgeGraph) state.knowledgeGraph = {entities: [], lastFetched: 0, loading: false};
+    if (!state.knowledgeGraph) state.knowledgeGraph = {entities: [], docRelationships: [], docMeta: {}, lastFetched: 0, loading: false};
     state.knowledgeGraph.loading = true;
     renderUserEntities();
     try {
@@ -2123,6 +2190,8 @@ async function fetchUserEntities(force = false) {
         if (res.ok) {
             const data = await res.json();
             state.knowledgeGraph.entities = data.entities || [];
+            state.knowledgeGraph.docRelationships = data.doc_relationships || [];
+            state.knowledgeGraph.docMeta = data.doc_metadata || {};
             state.knowledgeGraph.lastFetched = Date.now();
         }
     } catch (error) {
@@ -2197,6 +2266,120 @@ function renderUserEntities() {
     chipsEl.innerHTML = topEntities.map(entity => buildEntityChip(entity, 'global')).join('');
 }
 
+function getDocHighlights(docId) {
+    if (!docId) return [];
+    if (state.docHighlights && state.docHighlights[docId] && state.docHighlights[docId].length) {
+        return state.docHighlights[docId];
+    }
+    if (state.docCache && state.docCache[docId] && state.docCache[docId].highlights && state.docCache[docId].highlights.length) {
+        return state.docCache[docId].highlights;
+    }
+    const doc = state.docs.find(d => (d.backendId || d.id) === docId);
+    if (doc && doc.highlights && doc.highlights.length) {
+        return doc.highlights;
+    }
+    return [];
+}
+
+function pickEntityHighlight(doc, entity) {
+    if (!doc || !doc.doc_id) return null;
+    const highlights = getDocHighlights(doc.doc_id);
+    if (!highlights || highlights.length === 0) return null;
+    const terms = new Set();
+    if (entity?.name) terms.add(entity.name.toLowerCase());
+    (entity?.mentions || []).forEach(mention => {
+        if (mention) terms.add(String(mention).toLowerCase());
+    });
+    let bestHighlight = null;
+    let bestScore = -Infinity;
+    highlights.forEach((highlight, index) => {
+        const text = (highlight.text || '').trim();
+        if (!text) return;
+        const lower = text.toLowerCase();
+        let score = Number(highlight.score || 0);
+        if (terms.size === 0) {
+            score += 0.25;
+        } else {
+            terms.forEach(term => {
+                if (term && lower.includes(term)) {
+                    score += Math.min(2, term.length / 6) + 1;
+                }
+            });
+        }
+        if (!bestHighlight || score > bestScore) {
+            bestScore = score;
+            bestHighlight = {...highlight, index};
+        }
+    });
+    if (!bestHighlight && highlights.length > 0) {
+        bestHighlight = {...highlights[0], index: 0};
+    }
+    return bestHighlight;
+}
+
+function summarizeHighlightText(highlight) {
+    if (!highlight || !highlight.text) return '';
+    const text = highlight.text.trim().replace(/\s+/g, ' ');
+    if (text.length <= 140) return text;
+    return `${text.slice(0, 137)}…`;
+}
+
+function findHighlightIndex(docHighlights, highlight) {
+    if (!docHighlights || !highlight) return -1;
+    if (typeof highlight.index === 'number' && docHighlights[highlight.index]) {
+        return highlight.index;
+    }
+    if (highlight.id) {
+        const idxById = docHighlights.findIndex(item => item && item.id === highlight.id);
+        if (idxById !== -1) return idxById;
+    }
+    if (highlight.text) {
+        const normalized = highlight.text.trim().toLowerCase();
+        const idxByText = docHighlights.findIndex(item => (item?.text || '').trim().toLowerCase() === normalized);
+        if (idxByText !== -1) return idxByText;
+    }
+    return -1;
+}
+
+function focusHighlightNow(highlight) {
+    if (!highlight) return;
+    const activeDocId = state.activeId;
+    if (!activeDocId) return;
+    const docHighlights = getDocHighlights(activeDocId);
+    if (!docHighlights || docHighlights.length === 0) return;
+    const index = findHighlightIndex(docHighlights, highlight);
+    if (index === -1) return;
+    const resolvedHighlight = {
+        id: highlight.id || docHighlights[index]?.id || null,
+        text: highlight.text || docHighlights[index]?.text || '',
+        index
+    };
+
+    if (!allHighlights || allHighlights.length === 0) {
+        applySmartHighlights(docHighlights, {focus: resolvedHighlight});
+        return;
+    }
+
+    let targetIndex = -1;
+    if (resolvedHighlight.id) {
+        targetIndex = allHighlights.findIndex(el => el.dataset.hlId === resolvedHighlight.id);
+    }
+    if (targetIndex === -1) {
+        targetIndex = allHighlights.findIndex(el => parseInt(el.dataset.index || '-1', 10) === index);
+    }
+    if (targetIndex === -1 && resolvedHighlight.text) {
+        const normalized = resolvedHighlight.text.trim().toLowerCase();
+        targetIndex = allHighlights.findIndex(el => (el.textContent || '').trim().toLowerCase() === normalized);
+    }
+    if (targetIndex === -1) {
+        applySmartHighlights(docHighlights, {focus: resolvedHighlight});
+        return;
+    }
+    currentHighlightIndex = targetIndex;
+    scrollToHighlight(targetIndex);
+    pendingHighlight = null;
+}
+
 function renderEntityDetail(detail) {
     const panel = document.getElementById('entityDetailPanel');
     if (!panel) return;
@@ -2239,12 +2422,29 @@ function renderEntityDetail(detail) {
                 const isActive = (localDoc && localDoc.id === state.activeId) || doc.doc_id === state.activeId;
                 const buttonLabel = isActive ? 'Current' : 'Open';
                 const buttonState = isActive ? 'disabled class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-400 bg-emerald-50"' : 'class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50"';
-                return `<div class="entity-doc-link" data-doc-id="${escapeHtmlAttr(doc.doc_id)}">` +
+                const highlight = pickEntityHighlight(doc, entity);
+                const highlightAttrs = highlight
+                    ? ` data-highlight-id="${escapeHtmlAttr(highlight.id || '')}" data-highlight-index="${highlight.index ?? ''}" data-highlight-offset="${highlight.offset ?? ''}" data-highlight-text="${escapeHtmlAttr(highlight.text || '')}"`
+                    : '';
+                const snippet = highlight ? `<div class="text-[11px] text-gray-500 mt-1 leading-snug">${escapeHtml(summarizeHighlightText(highlight))}</div>` : '';
+                return `<div class="entity-doc-link" data-doc-id="${escapeHtmlAttr(doc.doc_id)}"${highlightAttrs}>` +
                     `<div class="flex-1"><div class="font-medium text-emerald-700">${label}</div>` +
-                    `<div class="text-[11px] text-gray-500">${timestamp}</div></div>` +
+                    `<div class="text-[11px] text-gray-500">${timestamp}</div>${snippet}</div>` +
                     `<button ${buttonState}>${buttonLabel}</button>` +
                     `</div>`;
             }).join('');
+        }
+    }
+    const wikiActions = document.getElementById('entityWikiActions');
+    const openWikiBtn = document.getElementById('openEntityWikiBtn');
+    const refreshWikiBtn = document.getElementById('refreshEntityWikiBtn');
+    if (wikiActions && openWikiBtn && refreshWikiBtn) {
+        if (state.user && !state.user.isGuest && entity?.entity_id) {
+            wikiActions.classList.remove('hidden');
+            openWikiBtn.onclick = () => openWikiForEntity(entity.entity_id);
+            refreshWikiBtn.onclick = () => openWikiForEntity(entity.entity_id, {force: true});
+        } else {
+            wikiActions.classList.add('hidden');
         }
     }
 }
@@ -2319,17 +2519,26 @@ async function showEntityDetail(entityId, source = 'doc') {
             state.entityDetailCache[entityId] = {detail, cachedAt: Date.now()};
             if (detail?.documents && detail.documents.length) {
                 state.docCache = state.docCache || {};
+                if (!state.docHighlights) state.docHighlights = {};
                 detail.documents.forEach(doc => {
-                    if (!doc || !doc.doc_id || state.docCache[doc.doc_id]) return;
+                    if (!doc || !doc.doc_id) return;
+                    const cacheEntry = state.docCache[doc.doc_id] || {};
                     state.docCache[doc.doc_id] = {
+                        ...cacheEntry,
                         doc_id: doc.doc_id,
-                        filename: doc.title || doc.doc_id,
-                        summary: doc.summary,
-                        created_at: doc.created_at,
-                        content: doc.summary || '',
-                        entities: [],
-                        media_type: doc.media_type
+                        filename: doc.title || cacheEntry.filename || doc.doc_id,
+                        summary: doc.summary ?? cacheEntry.summary ?? '',
+                        content: cacheEntry.content || doc.summary || '',
+                        created_at: doc.created_at || cacheEntry.created_at,
+                        updated_at: doc.updated_at || cacheEntry.updated_at,
+                        highlights: doc.highlights || cacheEntry.highlights || [],
+                        questions: doc.questions || cacheEntry.questions || [],
+                        entities: cacheEntry.entities || [],
+                        media_type: doc.media_type || cacheEntry.media_type
                     };
+                    if ((doc.highlights && doc.highlights.length) || (cacheEntry.highlights && cacheEntry.highlights.length)) {
+                        state.docHighlights[doc.doc_id] = doc.highlights && doc.highlights.length ? doc.highlights : cacheEntry.highlights || [];
+                    }
                 });
             }
             state.activeEntityId = entityId;
@@ -2386,7 +2595,8 @@ function hydrateDocFromResponse(data) {
         media_type: data.media_type,
         updated_at: data.updated_at || data.created_at,
         created_at: data.created_at,
-        entities: data.entities || []
+        entities: data.entities || [],
+        highlights: data.highlights || []
     };
     return doc;
 }
@@ -2398,9 +2608,17 @@ function addDocToState(doc, rawData) {
         Object.assign(existing, doc);
         existing.backendId = existing.backendId || doc.id;
         if (rawData?.entities) existing.entities = rawData.entities;
+        if (!state.docHighlights) state.docHighlights = {};
+        if (doc.highlights && doc.highlights.length) {
+            state.docHighlights[doc.id] = doc.highlights;
+        }
         return existing;
     }
     state.docs.push(doc);
+    if (!state.docHighlights) state.docHighlights = {};
+    if (doc.highlights && doc.highlights.length) {
+        state.docHighlights[doc.id] = doc.highlights;
+    }
     return doc;
 }
 
@@ -2413,6 +2631,8 @@ async function ensureDocLoaded(docId, {silent = false} = {}) {
         doc = hydrateDocFromResponse(state.docCache[docId]);
         addDocToState(doc, state.docCache[docId]);
         if (state.docEntities) state.docEntities[docId] = state.docCache[docId].entities || [];
+        if (!state.docHighlights) state.docHighlights = {};
+        state.docHighlights[docId] = state.docCache[docId].highlights || [];
         return doc;
     }
 
@@ -2445,6 +2665,8 @@ async function ensureDocLoaded(docId, {silent = false} = {}) {
             state.docFetchMeta[docId] = {fetchedAt: Date.now()};
             if (!state.docEntities) state.docEntities = {};
             state.docEntities[docId] = data.entities || [];
+            if (!state.docHighlights) state.docHighlights = {};
+            state.docHighlights[docId] = data.highlights || [];
             const hydrated = hydrateDocFromResponse(data);
             return addDocToState(hydrated, data);
         } catch (error) {
@@ -2460,8 +2682,9 @@ async function ensureDocLoaded(docId, {silent = false} = {}) {
     return await fetchPromise;
 }
 
-window.openDocFromEntity = async (docId) => {
+window.openDocFromEntity = async (docId, options = {}) => {
     if (!docId) return;
+    const highlightRequest = options.highlight || null;
     let targetDoc = state.docs.find(d => (d.backendId || d.id) === docId);
     if (!targetDoc) {
         const fetched = await ensureDocLoaded(docId);
@@ -2469,39 +2692,104 @@ window.openDocFromEntity = async (docId) => {
         targetDoc = fetched;
         saveState();
     }
+
+    let normalizedHighlight = null;
+    if (highlightRequest) {
+        const docHighlights = getDocHighlights(docId);
+        const index = findHighlightIndex(docHighlights, highlightRequest);
+        if (index !== -1) {
+            normalizedHighlight = {...highlightRequest, index};
+            pendingHighlight = {docId, ...normalizedHighlight};
+        } else {
+            pendingHighlight = null;
+        }
+    } else {
+        pendingHighlight = null;
+    }
+
     if (state.activeId !== targetDoc.id) {
         state.activeId = targetDoc.id;
         render();
         saveState();
         toast(`📄 Switched to ${targetDoc.name}`, true);
+    } else if (normalizedHighlight) {
+        focusHighlightNow(normalizedHighlight);
     }
 };
 
 let knowledgeGraphOverlayOpen = false;
 let knowledgeGraphSimulation = null;
+let pendingHighlight = null;
+
+function getGraphFilters() {
+    if (!state.knowledgeGraphFilters) {
+        state.knowledgeGraphFilters = {...defaultGraphFilters};
+    }
+    return state.knowledgeGraphFilters;
+}
+
+function updateGraphFilters(partial) {
+    const current = getGraphFilters();
+    state.knowledgeGraphFilters = {...current, ...partial};
+    saveState();
+    if (knowledgeGraphOverlayOpen) {
+        renderKnowledgeGraphOverlay();
+    }
+}
+
+function syncGraphFilterControls() {
+    const filters = getGraphFilters();
+    const searchInput = document.getElementById('graphSearchInput');
+    if (searchInput && searchInput.value !== (filters.search || '')) {
+        searchInput.value = filters.search || '';
+    }
+    const minSelect = document.getElementById('graphMinLinksSelect');
+    if (minSelect) {
+        const targetValue = String(filters.minLinks || 1);
+        if (minSelect.value !== targetValue) minSelect.value = targetValue;
+    }
+    const includeEntities = document.getElementById('graphIncludeEntities');
+    if (includeEntities) includeEntities.checked = filters.includeEntities !== false;
+    const includeDocs = document.getElementById('graphIncludeDocs');
+    if (includeDocs) includeDocs.checked = filters.includeDocs !== false;
+    const includeDocLinks = document.getElementById('graphIncludeDocLinks');
+    if (includeDocLinks) includeDocLinks.checked = filters.includeDocConnections !== false;
+    const minShared = document.getElementById('graphMinSharedSelect');
+    if (minShared) {
+        const targetValue = String(filters.minSharedEntities || 1);
+        if (minShared.value !== targetValue) minShared.value = targetValue;
+    }
+    const recentOnly = document.getElementById('graphRecentOnly');
+    if (recentOnly) recentOnly.checked = !!filters.recentOnly;
+}
 
 function buildKnowledgeGraphData() {
     const entities = state.knowledgeGraph?.entities || [];
+    const docRelationshipsRaw = state.knowledgeGraph?.docRelationships || [];
+    const docMetaServer = state.knowledgeGraph?.docMeta || {};
+    const filters = getGraphFilters();
+
+    const entityNodes = [];
+    const entityDocLinks = [];
     const docCounts = {};
-    const docMeta = new Map();
-    const nodes = [];
-    const links = [];
 
     entities.forEach(entity => {
         const docIds = entity.doc_ids || [];
-        nodes.push({
+        entityNodes.push({
             id: `entity:${entity.entity_id}`,
             rawId: entity.entity_id,
             label: entity.name || entity.entity_id,
             type: 'entity',
-            weight: entity.doc_count || docIds.length || 1
+            weight: entity.doc_count || docIds.length || 1,
+            docIds,
         });
         docIds.forEach(docId => {
             docCounts[docId] = (docCounts[docId] || 0) + 1;
-            links.push({
+            entityDocLinks.push({
                 source: `entity:${entity.entity_id}`,
                 target: `doc:${docId}`,
-                rawDocId: docId
+                rawDocId: docId,
+                type: 'entity-doc',
             });
         });
     });
@@ -2520,34 +2808,214 @@ function buildKnowledgeGraphData() {
         }
     });
 
+    docRelationshipsRaw.forEach(rel => {
+        if (!rel || !rel.source || !rel.target) return;
+        docCounts[rel.source] = docCounts[rel.source] || 0;
+        docCounts[rel.target] = docCounts[rel.target] || 0;
+    });
+
+    const docMeta = new Map();
+    const docRecencyScores = new Map();
+    const docSentimentScores = new Map();
+    const docEmotions = new Map();
+    const now = Date.now();
+    const recentOnly = !!filters.recentOnly;
+    const recentCutoffMs = 30 * 24 * 60 * 60 * 1000;
+
+    const docNodes = [];
     Object.keys(docCounts).forEach(docId => {
         const doc = state.docs.find(d => (d.backendId || d.id) === docId);
         const cached = state.docCache?.[docId];
         const detailDoc = cacheSources.find(d => d.doc_id === docId);
-        const label = doc?.name || cached?.filename || detailDoc?.title || docId;
+        const metaServer = docMetaServer[docId] || {};
+
+        const label = doc?.name || cached?.filename || detailDoc?.title || metaServer.title || docId;
+        const summary = doc?.summary || cached?.summary || detailDoc?.summary || metaServer.summary || '';
+        const createdAt = doc?.created_at || cached?.created_at || detailDoc?.created_at || metaServer.created_at || null;
+        const updatedAt = doc?.updated_at || cached?.updated_at || detailDoc?.updated_at || metaServer.updated_at || createdAt;
+
+        let updatedTime = updatedAt ? Date.parse(updatedAt) : NaN;
+        if (Number.isNaN(updatedTime) && metaServer.updated_at) {
+            updatedTime = Date.parse(metaServer.updated_at);
+        }
+
+        let recencyScore = typeof metaServer.recency_score === 'number' ? metaServer.recency_score : 0.3;
+        if (!Number.isNaN(updatedTime)) {
+            const ageDays = Math.max(0, (now - updatedTime) / (1000 * 60 * 60 * 24));
+            recencyScore = Math.max(0, 1 - Math.min(ageDays, 150) / 150);
+        }
+
+        if (recentOnly && (Number.isNaN(updatedTime) || (now - updatedTime) > recentCutoffMs)) {
+            return;
+        }
+
+        const sentimentScore = typeof metaServer.sentiment_score === 'number' ? metaServer.sentiment_score : 0;
+        const emotion = metaServer.emotion || (sentimentScore >= 0.3 ? 'positive' : sentimentScore <= -0.3 ? 'negative' : 'neutral');
+        const wordCount = metaServer.word_count || (doc?.plainText ? doc.plainText.trim().split(/\s+/).filter(Boolean).length : 0);
+        const entityCount = metaServer.entity_count || docCounts[docId] || 0;
+
+        docRecencyScores.set(docId, recencyScore);
+        docSentimentScores.set(docId, sentimentScore);
+        docEmotions.set(docId, emotion);
         docMeta.set(docId, {
             label,
-            summary: doc?.summary || cached?.summary || detailDoc?.summary || '',
-            created_at: doc?.created_at || cached?.created_at || detailDoc?.created_at
+            summary,
+            created_at: createdAt,
+            updated_at: updatedAt,
+            recencyScore,
+            sentiment_score: sentimentScore,
+            emotion,
+            word_count: wordCount,
+            entity_count: entityCount,
         });
-        nodes.push({
+        docNodes.push({
             id: `doc:${docId}`,
             rawId: docId,
             label,
             type: 'doc',
-            weight: docCounts[docId] || 1
+            weight: docCounts[docId] || 1,
+            recencyScore,
+            sentimentScore,
+            emotion,
+            summary,
         });
+    });
+
+    let nodes = [...entityNodes, ...docNodes];
+    let links = [...entityDocLinks];
+
+    const includeEntities = filters?.includeEntities !== false;
+    const includeDocs = filters?.includeDocs !== false;
+    if (!includeEntities || !includeDocs) {
+        nodes = nodes.filter(node => {
+            if (node.type === 'entity' && !includeEntities) return false;
+            if (node.type === 'doc' && !includeDocs) return false;
+            return true;
+        });
+    }
+
+    const allowedNodeIds = new Set(nodes.map(node => node.id));
+    const allowedDocIds = new Set(nodes.filter(node => node.type === 'doc').map(node => node.rawId));
+    links = links.filter(link => allowedNodeIds.has(link.source) && allowedNodeIds.has(link.target));
+
+    const includeDocConnections = filters.includeDocConnections !== false;
+    const minShared = Math.max(1, parseInt(filters.minSharedEntities, 10) || 1);
+    if (includeDocConnections) {
+        docRelationshipsRaw.forEach(rel => {
+            if (!rel || !rel.source || !rel.target) return;
+            if ((rel.weight || 0) < minShared) return;
+            if (!allowedDocIds.has(rel.source) || !allowedDocIds.has(rel.target)) return;
+            links.push({
+                source: `doc:${rel.source}`,
+                target: `doc:${rel.target}`,
+                type: 'doc-link',
+                weight: rel.weight || 1,
+                sharedEntities: rel.shared_entities || [],
+            });
+        });
+    }
+
+    const searchTerm = (filters?.search || '').trim().toLowerCase();
+    let searchScope = null;
+    let searchMatches = null;
+    if (searchTerm) {
+        const matched = new Set(
+            nodes
+                .filter(node => {
+                    if ((node.label || '').toLowerCase().includes(searchTerm)) return true;
+                    if ((node.rawId || '').toLowerCase().includes(searchTerm)) return true;
+                    if (node.type === 'doc') {
+                        const meta = docMeta.get(node.rawId);
+                        if (meta && (meta.summary || '').toLowerCase().includes(searchTerm)) return true;
+                    }
+                    return false;
+                })
+                .map(node => node.id)
+        );
+        if (matched.size > 0) {
+            searchMatches = new Set(matched);
+            const expanded = new Set(matched);
+            links.forEach(link => {
+                if (matched.has(link.source) || matched.has(link.target)) {
+                    expanded.add(link.source);
+                    expanded.add(link.target);
+                }
+            });
+            searchScope = expanded;
+            nodes = nodes.filter(node => expanded.has(node.id));
+            const allowed = new Set(nodes.map(node => node.id));
+            links = links.filter(link => allowed.has(link.source) && allowed.has(link.target));
+        } else {
+            nodes = [];
+            links = [];
+        }
+    }
+
+    const degreeMap = {};
+    links.forEach(link => {
+        degreeMap[link.source] = (degreeMap[link.source] || 0) + 1;
+        degreeMap[link.target] = (degreeMap[link.target] || 0) + 1;
+    });
+
+    nodes.forEach(node => {
+        node.degree = degreeMap[node.id] || 0;
+        if (node.type === 'entity') {
+            const docIds = node.docIds || [];
+            const bestScore = docIds.reduce((score, docId) => {
+                const candidate = docRecencyScores.get(docId);
+                return candidate !== undefined && candidate > score ? candidate : score;
+            }, 0);
+            node.recencyScore = bestScore;
+        } else if (node.type === 'doc') {
+            node.recencyScore = docRecencyScores.get(node.rawId) || node.recencyScore || 0;
+            node.sentimentScore = docSentimentScores.get(node.rawId) || node.sentimentScore || 0;
+            node.emotion = docEmotions.get(node.rawId) || node.emotion || 'neutral';
+        }
+    });
+
+    const minLinks = Math.max(0, parseInt(filters?.minLinks, 10) || 1);
+    if (minLinks > 1) {
+        const preservedBySearch = searchScope ? new Set(searchScope) : null;
+        nodes = nodes.filter(node => {
+            if (preservedBySearch && preservedBySearch.has(node.id)) return true;
+            return (node.degree || 0) >= minLinks;
+        });
+        const allowed = new Set(nodes.map(node => node.id));
+        links = links.filter(link => allowed.has(link.source) && allowed.has(link.target));
+    }
+
+    if (searchMatches) {
+        nodes.forEach(node => {
+            node.isSearchMatch = searchMatches.has(node.id);
+        });
+    }
+
+    links = links.map(link => {
+        if (link.type === 'doc-link') {
+            const sourceScore = docRecencyScores.get(link.source.replace('doc:', '')) || 0.3;
+            const targetScore = docRecencyScores.get(link.target.replace('doc:', '')) || 0.3;
+            return {...link, recencyScore: Math.max(sourceScore, targetScore)};
+        }
+        const docId = link.rawDocId || (link.target && String(link.target).startsWith('doc:') ? String(link.target).slice(4) : null);
+        const recency = docId ? (docRecencyScores.get(docId) ?? 0.3) : 0.3;
+        return {...link, recencyScore: recency};
+    });
+
+    const visibleDocIds = new Set(nodes.filter(node => node.type === 'doc').map(node => node.rawId));
+    const filteredDocMeta = new Map();
+    visibleDocIds.forEach(docId => {
+        if (docMeta.has(docId)) filteredDocMeta.set(docId, docMeta.get(docId));
     });
 
     return {
         nodes,
         links,
         stats: {
-            entityCount: entities.length,
-            docCount: Object.keys(docCounts).length,
-            linkCount: links.length
+            entityCount: nodes.filter(node => node.type === 'entity').length,
+            docCount: nodes.filter(node => node.type === 'doc').length,
+            linkCount: links.length,
         },
-        docMeta
+        docMeta: filteredDocMeta,
     };
 }
 
@@ -2564,6 +3032,7 @@ async function openKnowledgeGraphOverlay(options = {}) {
     if (!overlay) return;
     overlay.classList.add('active');
     knowledgeGraphOverlayOpen = true;
+    syncGraphFilterControls();
     renderKnowledgeGraphOverlay();
 }
 
@@ -2586,14 +3055,23 @@ function renderKnowledgeGraphOverlay() {
     const subtitleEl = document.getElementById('knowledgeGraphOverlaySubtitle');
     if (!svgEl) return;
 
-    const {nodes, links, stats} = buildKnowledgeGraphData();
-    const hasData = nodes.length > 0 && links.length > 0;
+    const {nodes, links, stats, docMeta} = buildKnowledgeGraphData();
+    const filters = getGraphFilters();
+    const filterActive = !!((filters?.search || '').length || (parseInt(filters?.minLinks, 10) || 1) > 1 || filters?.includeDocs === false || filters?.includeEntities === false || filters?.includeDocConnections === false || filters?.recentOnly);
+    const hasData = nodes.length > 0;
     if (subtitleEl) {
-        subtitleEl.textContent = hasData ? 'Entities connected to your documents' : 'Knowledge graph will grow as you tag more entities.';
+        subtitleEl.textContent = hasData
+            ? 'Entities connected to your documents'
+            : filterActive
+                ? 'No graph matches the current filters.'
+                : 'Knowledge graph will grow as you tag more entities.';
     }
     if (!hasData) {
-        svgEl.innerHTML = '<foreignObject x="0" y="0" width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="height:100%;display:flex;align-items:center;justify-content:center;color:#047857;font-size:12px;">Add more entities across documents to visualize your knowledge graph.</div></foreignObject>';
-        if (infoEl) infoEl.textContent = '';
+        const message = filterActive
+            ? 'Adjust your filters to explore more knowledge graph connections.'
+            : 'Add more entities across documents to visualize your knowledge graph.';
+        svgEl.innerHTML = `<foreignObject x="0" y="0" width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="height:100%;display:flex;align-items:center;justify-content:center;color:#047857;font-size:12px;padding:0 32px;text-align:center;">${message}</div></foreignObject>`;
+        if (infoEl) infoEl.textContent = '0 entities • 0 documents • 0 connections';
         return;
     }
 
@@ -2605,24 +3083,54 @@ function renderKnowledgeGraphOverlay() {
     const svg = d3.select(svgEl);
     svg.selectAll('*').remove();
 
+    const docMetaMap = docMeta || new Map();
+
+    const colorForDoc = (node) => {
+        const emotion = (node.emotion || '').toLowerCase();
+        if (emotion === 'joy' || emotion === 'positive' || emotion === 'delight') return '#0ea5e9';
+        if (emotion === 'anger' || emotion === 'sadness' || emotion === 'fear' || emotion === 'negative') return '#f97316';
+        return '#38bdf8';
+    };
+
     nodes.forEach(node => {
-        const base = node.type === 'entity' ? 24 : 16;
-        node.radius = Math.max(base, Math.min(base + (node.weight || 1) * 4, 46));
+        const base = node.type === 'entity' ? 20 : 14;
+        const weightFactor = Math.max(1, node.weight || 1);
+        const recency = typeof node.recencyScore === 'number' ? node.recencyScore : 0.2;
+        const boost = 0.8 + recency * 0.7;
+        let radius = Math.max(base, Math.min(base * boost + weightFactor * 3, 54));
+        if (node.isSearchMatch) {
+            radius = Math.min(radius + 6, 60);
+        }
+        node.radius = radius;
+        node.fillOpacity = 0.45 + recency * 0.55;
+        node.strokeOpacity = 0.5 + recency * 0.5;
+        node.strokeWidth = 1.8 + recency * 1.2;
+        if (node.type === 'doc') {
+            node.fillColor = colorForDoc(node);
+        }
     });
 
     knowledgeGraphSimulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links).id(d => d.id).distance(d => d.rawDocId ? 140 : 110).strength(0.6))
+        .force('link', d3.forceLink(links).id(d => d.id).distance(d => {
+            if (d.rawDocId) {
+                const recency = d.recencyScore || 0.3;
+                return Math.max(90, 160 - recency * 60);
+            }
+            return 110;
+        }).strength(0.6))
         .force('charge', d3.forceManyBody().strength(-320))
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force('collision', d3.forceCollide().radius(d => d.radius + 12));
 
     const link = svg.append('g')
-        .attr('stroke', 'rgba(14,116,144,0.3)')
-        .attr('stroke-width', 1.4)
         .selectAll('line')
         .data(links)
         .enter()
-        .append('line');
+        .append('line')
+        .attr('stroke', d => d.type === 'doc-link' ? '#f59e0b' : '#0f766e')
+        .attr('stroke-width', d => d.type === 'doc-link' ? Math.min(4, 1.2 + (d.weight || 1)) : 1.4)
+        .attr('stroke-dasharray', d => d.type === 'doc-link' ? '4 3' : null)
+        .attr('stroke-opacity', d => 0.25 + (d.recencyScore || 0.3) * 0.55);
 
     const node = svg.append('g')
         .selectAll('g')
@@ -2648,23 +3156,41 @@ function renderKnowledgeGraphOverlay() {
 
     node.append('circle')
         .attr('r', d => d.radius)
-        .attr('fill', d => d.type === 'entity' ? '#047857' : '#0ea5e9')
-        .attr('fill-opacity', 0.9)
-        .attr('stroke', 'white')
-        .attr('stroke-width', 2);
+        .attr('fill', d => d.type === 'entity' ? '#047857' : (d.fillColor || colorForDoc(d)))
+        .attr('fill-opacity', d => d.fillOpacity || 0.75)
+        .attr('stroke', d => d.isSearchMatch ? '#f97316' : '#ffffff')
+        .attr('stroke-opacity', d => d.strokeOpacity || 0.8)
+        .attr('stroke-width', d => d.strokeWidth || 2);
 
     node.append('text')
         .attr('text-anchor', 'middle')
         .attr('dy', d => d.type === 'entity' ? d.radius + 14 : d.radius + 12)
         .attr('fill', '#0f172a')
         .attr('font-size', '11px')
-        .attr('font-weight', d => d.type === 'entity' ? 600 : 500)
+        .attr('font-weight', d => d.isSearchMatch ? 700 : (d.type === 'entity' ? 600 : 500))
         .text(d => d.label.length > 24 ? `${d.label.slice(0, 24)}…` : d.label);
 
     node.append('title').text(d => {
-        return d.type === 'entity'
-            ? `${d.label} • ${d.weight || 0} doc${(d.weight || 0) === 1 ? '' : 's'}`
-            : `${d.label} • ${d.weight || 0} entit${(d.weight || 0) === 1 ? 'y' : 'ies'}`;
+        if (d.type === 'entity') {
+            return `${d.label} • ${d.weight || 0} doc${(d.weight || 0) === 1 ? '' : 's'}`;
+        }
+        const meta = docMetaMap.get(d.rawId);
+        const updatedLabel = meta?.updated_at ? `Updated ${getTimeAgo(new Date(meta.updated_at).getTime())}` : 'Recently unseen';
+        const summary = meta?.summary ? `\n${meta.summary.slice(0, 280)}` : '';
+        const sentiment = typeof d.sentimentScore === 'number' ? `Sentiment ${d.sentimentScore >= 0 ? '+' : ''}${(d.sentimentScore * 100).toFixed(0)}% ${d.emotion || ''}` : '';
+        const entitiesCount = meta?.entity_count ? `${meta.entity_count} shared entities` : '';
+        const details = [updatedLabel, sentiment, entitiesCount].filter(Boolean).join(' • ');
+        return `${d.label}${details ? `\n${details}` : ''}${summary}`;
+    });
+
+    link.append('title').text(d => {
+        if (d.type === 'doc-link' && d.sharedEntities && d.sharedEntities.length) {
+            return `Shared entities: ${d.sharedEntities.slice(0, 6).join(', ')}`;
+        }
+        if (d.rawDocId) {
+            return `Linked via ${d.rawDocId}`;
+        }
+        return '';
     });
 
     node.on('click', (event, d) => {
@@ -2690,7 +3216,395 @@ function renderKnowledgeGraphOverlay() {
     });
 
     if (infoEl) {
-        infoEl.textContent = `${stats.entityCount} entit${stats.entityCount === 1 ? 'y' : 'ies'} • ${stats.docCount} document${stats.docCount === 1 ? '' : 's'} • ${stats.linkCount} connection${stats.linkCount === 1 ? '' : 's'}`;
+        const filterSuffix = filterActive ? ' • Filters applied' : '';
+        infoEl.textContent = `${stats.entityCount} entit${stats.entityCount === 1 ? 'y' : 'ies'} • ${stats.docCount} document${stats.docCount === 1 ? '' : 's'} • ${stats.linkCount} connection${stats.linkCount === 1 ? '' : 's'}${filterSuffix}`;
+    }
+}
+
+async function fetchTemporalAnalytics(force = false) {
+    if (!state.temporalAnalytics) state.temporalAnalytics = {data: null, lastFetched: 0, loading: false, error: null};
+    const now = Date.now();
+    if (!force && state.temporalAnalytics.data && now - (state.temporalAnalytics.lastFetched || 0) < TEMPORAL_CACHE_TTL) {
+        return;
+    }
+    if (state.temporalAnalytics.loading) return;
+    if (!state.user || state.user.isGuest) {
+        state.temporalAnalytics = {data: null, lastFetched: 0, loading: false, error: null};
+        renderTemporalAnalyticsInsights();
+        return;
+    }
+    state.temporalAnalytics.loading = true;
+    state.temporalAnalytics.error = null;
+    renderTemporalAnalyticsInsights();
+    try {
+        const headers = {'Content-Type': 'application/json'};
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+        const res = await fetch(`${API}/dev/analytics/temporal?user_id=${encodeURIComponent(state.user.sub)}`, {headers});
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        state.temporalAnalytics = {
+            data,
+            lastFetched: Date.now(),
+            loading: false,
+            error: null,
+        };
+        saveState();
+    } catch (error) {
+        console.warn('Temporal analytics fetch failed', error);
+        state.temporalAnalytics.loading = false;
+        state.temporalAnalytics.error = 'Unable to load analytics right now.';
+    }
+    renderTemporalAnalyticsInsights();
+}
+
+function buildTemporalSparkline(points, options = {}) {
+    if (!points || points.length === 0) return '';
+    const width = options.width || 220;
+    const height = options.height || 60;
+    const values = points.map(p => (typeof p === 'number' ? p : (p.moving_average ?? p.sentiment ?? 0)));
+    const min = Math.min(...values, 0);
+    const max = Math.max(...values, 0.001);
+    const range = max - min || 1;
+    const step = width / Math.max(1, points.length - 1);
+    const path = points
+        .map((point, idx) => {
+            const value = typeof point === 'number' ? point : (point.moving_average ?? point.sentiment ?? 0);
+            const x = Math.round(idx * step);
+            const y = Math.round(height - ((value - min) / range) * height);
+            return `${idx === 0 ? 'M' : 'L'}${x},${y}`;
+        })
+        .join(' ');
+    return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" class="w-full h-16">
+        <path d="${path}" fill="none" stroke="url(#sparkGradient)" stroke-width="2"/>
+        <defs>
+            <linearGradient id="sparkGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#10b981"/>
+                <stop offset="100%" stop-color="#0ea5e9"/>
+            </linearGradient>
+        </defs>
+    </svg>`;
+}
+
+function renderTemporalAnalyticsInsights() {
+    const container = document.getElementById('temporalAnalyticsSection');
+    if (!container) return;
+    const analyticsState = state.temporalAnalytics || {data: null, loading: false};
+    if (analyticsState.loading) {
+        container.innerHTML = '<div class="text-xs text-gray-500">Analyzing your timeline…</div>';
+        return;
+    }
+    if (analyticsState.error) {
+        container.innerHTML = `<div class="text-xs text-red-500">${analyticsState.error}</div>`;
+        return;
+    }
+    if (!analyticsState.data) {
+        container.innerHTML = '<div class="text-xs text-gray-500">Temporal analytics will appear once you have a few entries.</div>';
+        return;
+    }
+    const data = analyticsState.data;
+    const generatedAt = data.generated_at ? new Date(data.generated_at).toLocaleString() : '';
+    const sentimentPoints = (data.sentiment_timeline || []).map(point => ({
+        sentiment: point.sentiment,
+        moving_average: point.moving_average ?? point.sentiment,
+    }));
+    const sparkline = sentimentPoints.length > 1 ? buildTemporalSparkline(sentimentPoints) : '';
+    const insightsList = (data.insights || []).map(item => `<li class="leading-snug">${escapeHtml(item)}</li>`).join('');
+    const topics = (data.monthly_topics || []).slice(-2).map(entry => {
+        const chips = (entry.topics || []).map(topicEntry => `<span class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-full text-[10px] text-emerald-700">${escapeHtml(topicEntry.topic)}<span class="opacity-60">×${topicEntry.count}</span></span>`).join(' ');
+        return `<div class="flex flex-col gap-1">
+            <div class="text-[10px] uppercase tracking-wide text-gray-400">${escapeHtml(entry.month)}</div>
+            <div class="flex flex-wrap gap-1">${chips}</div>
+        </div>`;
+    }).join('');
+    const weeklyTotals = data.velocity?.weekly_totals || [];
+    const latestWeek = weeklyTotals.length ? weeklyTotals[weeklyTotals.length - 1] : null;
+    const prevWeek = weeklyTotals.length > 1 ? weeklyTotals[weeklyTotals.length - 2] : null;
+    const weekDelta = latestWeek && prevWeek ? latestWeek.words - prevWeek.words : 0;
+    const deltaBadge = latestWeek
+        ? `<span class="text-[10px] font-semibold ${weekDelta >= 0 ? 'text-emerald-600' : 'text-orange-600'}">
+            ${weekDelta >= 0 ? '▲' : '▼'} ${Math.abs(weekDelta)}
+        </span>`
+        : '';
+    container.innerHTML = `
+        <div class="border border-emerald-100 rounded-xl p-3 bg-white/80 space-y-3">
+            <div class="flex items-center justify-between">
+                <div class="text-xs font-semibold text-emerald-700">📈 Temporal Analytics</div>
+                <button id="refreshTemporalBtn" class="text-[10px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">Refresh</button>
+            </div>
+            ${sparkline ? `<div class="w-full">${sparkline}</div>` : ''}
+            <div class="grid grid-cols-2 gap-2 text-[11px]">
+                <div class="rounded-lg bg-emerald-50/70 border border-emerald-100 px-3 py-2">
+                    <div class="text-[10px] uppercase tracking-wide text-emerald-500">Weekly Words</div>
+                    <div class="text-emerald-700 font-semibold">${latestWeek ? latestWeek.words : 0}</div>
+                    ${deltaBadge}
+                </div>
+                <div class="rounded-lg bg-cyan-50/70 border border-cyan-100 px-3 py-2">
+                    <div class="text-[10px] uppercase tracking-wide text-cyan-500">Streak</div>
+                    <div class="text-cyan-700 font-semibold">${data.velocity?.streak_days || 0} days</div>
+                </div>
+            </div>
+            ${topics ? `<div class="space-y-2">
+                <div class="text-[10px] uppercase tracking-wide text-gray-400">Trending Topics</div>
+                ${topics}
+            </div>` : ''}
+            ${insightsList ? `<div>
+                <div class="text-[10px] uppercase tracking-wide text-gray-400">Predictive Insights</div>
+                <ul class="list-disc ml-4 text-xs space-y-1">${insightsList}</ul>
+            </div>` : ''}
+            <div class="text-[10px] text-gray-400">Updated ${generatedAt}</div>
+        </div>
+    `;
+    const refreshBtn = document.getElementById('refreshTemporalBtn');
+    if (refreshBtn) {
+        refreshBtn.onclick = () => fetchTemporalAnalytics(true);
+    }
+}
+
+async function fetchWikiPage(pageId, options = {}) {
+    if (!state.user || state.user.isGuest) return null;
+    if (!state.wikiCache) state.wikiCache = {};
+    const cacheEntry = state.wikiCache[pageId];
+    const force = options.force === true;
+    if (!force && cacheEntry && Date.now() - (cacheEntry.cachedAt || 0) < WIKI_CACHE_TTL) {
+        return cacheEntry.page;
+    }
+    const params = new URLSearchParams({user_id: state.user.sub});
+    if (options.autoCreate) {
+        params.set('auto_create', 'true');
+        if (options.entityId) params.set('entity_id', options.entityId);
+    }
+    const headers = {'Content-Type': 'application/json'};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    const res = await fetch(`${API}/dev/wiki/${encodeURIComponent(pageId)}?${params.toString()}`, {headers});
+    if (res.ok) {
+        const page = await res.json();
+        state.wikiCache[pageId] = {page, cachedAt: Date.now()};
+        saveState();
+        return page;
+    }
+    if (res.status === 404 && !options.autoCreate) {
+        return null;
+    }
+    throw new Error(`wiki_fetch_failed:${res.status}`);
+}
+
+async function saveWikiPage(pageId, payload) {
+    if (!state.user || state.user.isGuest) throw new Error('not_authenticated');
+    const headers = {'Content-Type': 'application/json'};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    const body = {
+        user_id: state.user.sub,
+        page_id: pageId,
+        entity_id: payload.entityId,
+        title: payload.title,
+        sections: payload.sections,
+        version: payload.version,
+    };
+    const res = await fetch(`${API}/dev/wiki`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+    });
+    if (res.status === 409) {
+        const data = await res.json();
+        return {conflict: true, latest: data.page};
+    }
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Unable to save wiki page');
+    }
+    const data = await res.json();
+    if (data.page) {
+        state.wikiCache = state.wikiCache || {};
+        state.wikiCache[data.page.page_id] = {page: data.page, cachedAt: Date.now()};
+        saveState();
+    }
+    return {page: data.page, warnings: data.warnings || []};
+}
+
+async function openWikiForEntity(entityId, options = {}) {
+    if (!state.user || state.user.isGuest) {
+        toast('Sign in to build your knowledge wiki.', true);
+        return;
+    }
+    try {
+        const pageId = entityId || `wiki-${state.user.sub}`;
+        const page = await fetchWikiPage(pageId, {entityId, autoCreate: true, force: options.force});
+        if (page) {
+            showWikiModal(page, {entityId});
+        } else {
+            toast('Wiki page not found.', true);
+        }
+    } catch (error) {
+        console.warn('Wiki load failed', error);
+        toast('Unable to load wiki right now.', true);
+    }
+}
+
+async function exportWikiPage(pageId, title) {
+    if (!state.user || state.user.isGuest) return;
+    const params = new URLSearchParams({user_id: state.user.sub});
+    const headers = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    const res = await fetch(`${API}/dev/wiki/${encodeURIComponent(pageId)}/export?${params.toString()}`, {headers});
+    if (!res.ok) {
+        toast('Unable to export wiki page.', true);
+        return;
+    }
+    const markdown = await res.text();
+    const blob = new Blob([markdown], {type: 'text/markdown'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${(title || 'wiki').replace(/[^a-z0-9-_]+/gi, '_')}.md`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+        URL.revokeObjectURL(link.href);
+        link.remove();
+    }, 0);
+}
+
+function showWikiModal(page, options = {}) {
+    let overlay = document.getElementById('wikiOverlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'wikiOverlay';
+        overlay.className = 'fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[120]';
+        document.body.appendChild(overlay);
+    }
+    overlay.dataset.pageId = page.page_id;
+    overlay.dataset.version = page.version || 1;
+    overlay.dataset.entityId = options.entityId || page.entity_id || '';
+    const sections = page.sections || [];
+    overlay.innerHTML = `
+        <div class="w-[720px] max-h-[85vh] bg-white/95 rounded-3xl border border-emerald-200 shadow-2xl flex flex-col">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-cyan-50 rounded-t-3xl">
+                <div class="flex flex-col gap-1">
+                    <input id="wikiTitleInput" class="text-lg font-semibold text-emerald-700 bg-transparent focus:outline-none" value="${escapeHtmlAttr(page.title || 'Untitled Wiki')}" maxlength="120"/>
+                    <div class="text-[11px] text-gray-500">Last updated ${page.updated_at ? new Date(page.updated_at).toLocaleString() : '—'} • ${sections.length} section${sections.length === 1 ? '' : 's'}</div>
+                </div>
+                <div class="flex gap-2">
+                    <button id="wikiExportBtn" class="text-[11px] px-3 py-1 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">Export</button>
+                    <button id="wikiCloseBtn" class="text-[11px] px-3 py-1 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">Close</button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-auto px-5 py-4 space-y-4" id="wikiSectionsContainer">
+                ${sections.map(section => `
+                    <div class="wiki-section border border-emerald-100 rounded-xl p-4 bg-white/80" data-section-id="${escapeHtmlAttr(section.id)}">
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <input class="wiki-section-title w-full text-sm font-semibold text-emerald-700 bg-transparent border-b border-emerald-100 focus:outline-none focus:border-emerald-300" value="${escapeHtmlAttr(section.title || '')}" maxlength="200"/>
+                            <button class="wiki-remove-section text-[10px] px-2 py-0.5 rounded-full border border-red-200 text-red-500 hover:bg-red-50">Remove</button>
+                        </div>
+                        <textarea class="wiki-section-content w-full h-28 text-xs leading-relaxed border border-emerald-100 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-300" placeholder="Add details">${escapeHtml(section.content || '')}</textarea>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="px-5 py-4 border-t border-emerald-100 flex items-center justify-between bg-white/90 rounded-b-3xl">
+                <div class="flex items-center gap-2 text-[11px] text-gray-500">
+                    <button id="wikiAddSectionBtn" class="px-3 py-1 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">+ Section</button>
+                    <span>Auto-saved pages are versioned for safe collaboration.</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="wikiStatusMessage" class="text-[11px] text-gray-400"></span>
+                    <button id="wikiSaveBtn" class="px-4 py-1 rounded-full bg-emerald-500 text-white text-[11px] hover:bg-emerald-600">Save</button>
+                </div>
+            </div>
+        </div>
+    `;
+    overlay.onclick = (event) => {
+        if (event.target === overlay) closeWikiModal();
+    };
+    const closeBtn = overlay.querySelector('#wikiCloseBtn');
+    if (closeBtn) closeBtn.onclick = () => closeWikiModal();
+    const addBtn = overlay.querySelector('#wikiAddSectionBtn');
+    if (addBtn) addBtn.onclick = () => addWikiSection(overlay);
+    overlay.querySelectorAll('.wiki-remove-section').forEach(btn => {
+        btn.addEventListener('click', (event) => {
+            event.preventDefault();
+            const section = btn.closest('.wiki-section');
+            section?.remove();
+        });
+    });
+    const saveBtn = overlay.querySelector('#wikiSaveBtn');
+    if (saveBtn) {
+        saveBtn.onclick = async () => {
+            try {
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Saving…';
+                const titleInput = overlay.querySelector('#wikiTitleInput');
+                const sectionsToSave = collectWikiSectionsFromModal(overlay);
+                const pageId = overlay.dataset.pageId;
+                const version = parseInt(overlay.dataset.version || '1', 10);
+                const response = await saveWikiPage(pageId, {
+                    title: titleInput.value.trim() || 'Untitled Wiki',
+                    sections: sectionsToSave,
+                    version,
+                    entityId: overlay.dataset.entityId || null,
+                });
+                if (response.conflict && response.latest) {
+                    showWikiModal(response.latest, {entityId: response.latest.entity_id});
+                    toast('Wiki updated elsewhere. Showing latest version.', true);
+                } else if (response.page) {
+                    showWikiModal(response.page, {entityId: response.page.entity_id});
+                    toast('✅ Wiki saved');
+                }
+            } catch (error) {
+                console.warn('Wiki save failed', error);
+                toast('Unable to save wiki page.', true);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save';
+            }
+        };
+    }
+    const exportBtn = overlay.querySelector('#wikiExportBtn');
+    if (exportBtn) {
+        exportBtn.onclick = () => exportWikiPage(page.page_id, page.title);
+    }
+    document.addEventListener('keydown', wikiEscapeHandler, {once: true});
+}
+
+function collectWikiSectionsFromModal(modal) {
+    const sections = [];
+    modal.querySelectorAll('.wiki-section').forEach(section => {
+        const id = section.dataset.sectionId || `section-${Date.now().toString(36)}`;
+        const title = section.querySelector('.wiki-section-title')?.value || '';
+        const content = section.querySelector('.wiki-section-content')?.value || '';
+        sections.push({id, title, content});
+    });
+    return sections;
+}
+
+function addWikiSection(modal) {
+    const container = modal.querySelector('#wikiSectionsContainer');
+    if (!container) return;
+    const newId = `section-${Date.now().toString(36)}`;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'wiki-section border border-emerald-100 rounded-xl p-4 bg-white/80';
+    wrapper.dataset.sectionId = newId;
+    wrapper.innerHTML = `
+        <div class="flex items-center justify-between gap-2 mb-2">
+            <input class="wiki-section-title w-full text-sm font-semibold text-emerald-700 bg-transparent border-b border-emerald-100 focus:outline-none focus:border-emerald-300" placeholder="Section title" maxlength="200"/>
+            <button class="wiki-remove-section text-[10px] px-2 py-0.5 rounded-full border border-red-200 text-red-500 hover:bg-red-50">Remove</button>
+        </div>
+        <textarea class="wiki-section-content w-full h-28 text-xs leading-relaxed border border-emerald-100 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-300" placeholder="Add details"></textarea>
+    `;
+    container.appendChild(wrapper);
+    wrapper.querySelector('.wiki-remove-section')?.addEventListener('click', (event) => {
+        event.preventDefault();
+        wrapper.remove();
+    });
+    wrapper.querySelector('.wiki-section-title')?.focus();
+}
+
+function closeWikiModal() {
+    const overlay = document.getElementById('wikiOverlay');
+    if (overlay) overlay.remove();
+}
+
+function wikiEscapeHandler(event) {
+    if (event.key === 'Escape') {
+        closeWikiModal();
     }
 }
 
@@ -2749,6 +3663,17 @@ function attachAllEvents() {
         setKnowledgeGraphCollapsed(collapsed);
     });
     on('closeEntityDetail', 'onclick', () => clearEntityDetail());
+    on('graphMinLinksSelect', 'onchange', (e) => updateGraphFilters({minLinks: parseInt(e.target.value, 10) || 1}));
+    on('graphIncludeEntities', 'onchange', (e) => updateGraphFilters({includeEntities: !!e.target.checked}));
+    on('graphIncludeDocs', 'onchange', (e) => updateGraphFilters({includeDocs: !!e.target.checked}));
+    on('graphIncludeDocLinks', 'onchange', (e) => updateGraphFilters({includeDocConnections: !!e.target.checked}));
+    on('graphMinSharedSelect', 'onchange', (e) => updateGraphFilters({minSharedEntities: parseInt(e.target.value, 10) || 1}));
+    on('graphRecentOnly', 'onchange', (e) => updateGraphFilters({recentOnly: !!e.target.checked}));
+    on('graphSearchInput', 'oninput', (e) => {
+        const value = e.target.value || '';
+        clearTimeout(graphSearchDebounce);
+        graphSearchDebounce = setTimeout(() => updateGraphFilters({search: value.trim()}), 180);
+    });
     
     // File upload
     on('fileInput', 'onchange', handleFileUpload);
@@ -2968,7 +3893,15 @@ document.addEventListener('click', (event) => {
         if (button && button.disabled) return;
         const docId = docLink.dataset.docId;
         if (docId) {
-            openDocFromEntity(docId);
+            const highlightData = docLink.dataset.highlightId || docLink.dataset.highlightText
+                ? {
+                    id: docLink.dataset.highlightId || null,
+                    text: docLink.dataset.highlightText || null,
+                    offset: docLink.dataset.highlightOffset ? parseInt(docLink.dataset.highlightOffset, 10) : null,
+                    index: docLink.dataset.highlightIndex ? parseInt(docLink.dataset.highlightIndex, 10) : null,
+                }
+                : null;
+            openDocFromEntity(docId, {highlight: highlightData});
             hideEntityHoverCard();
         }
     }
@@ -5323,7 +6256,7 @@ function scrollToHighlight(index) {
     document.getElementById('highlightCount').textContent = `${index + 1} of ${allHighlights.length}`;
 }
 
-function applySmartHighlights(highlights) {
+function applySmartHighlights(highlights, options = {}) {
     console.log('Applying highlights:', highlights);
     if (!highlights || highlights.length === 0) {
         console.log('No highlights to apply');
@@ -5334,6 +6267,11 @@ function applySmartHighlights(highlights) {
     saveState();
     
     const editor = document.getElementById('editor');
+    editor.querySelectorAll('.smart-highlight').forEach(mark => {
+        const parent = mark.parentNode;
+        while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+        parent.removeChild(mark);
+    });
     let content = editor.innerHTML;
     let appliedCount = 0;
     
@@ -5347,7 +6285,8 @@ function applySmartHighlights(highlights) {
         const style = colors[h.type] || colors.key;
         const escaped = h.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp(`(${escaped})`, 'gi');
-        const newContent = content.replace(regex, `<mark class="smart-highlight" data-index="${idx}" style="${style}" title="${h.type}">$1</mark>`);
+        const hlId = h.id ? escapeHtmlAttr(h.id) : `auto-${idx}`;
+        const newContent = content.replace(regex, `<mark class="smart-highlight" data-index="${idx}" data-hl-id="${hlId}" style="${style}" title="${h.type}">$1</mark>`);
         if (newContent !== content) appliedCount++;
         content = newContent;
     });
@@ -5356,13 +6295,41 @@ function applySmartHighlights(highlights) {
     allHighlights = Array.from(editor.querySelectorAll('.smart-highlight'));
     currentHighlightIndex = 0;
     
+    const focusRequest = options.focus || null;
+    let focusIndex = -1;
+    let matchedHighlight = null;
+    if (focusRequest) {
+        const idx = findHighlightIndex(highlights, focusRequest);
+        if (focusRequest.id) {
+            const byId = allHighlights.findIndex(el => el.dataset.hlId === focusRequest.id);
+            if (byId !== -1) focusIndex = byId;
+        }
+        if (focusIndex === -1 && typeof idx === 'number' && idx >= 0 && idx < allHighlights.length) {
+            const byIdx = allHighlights.findIndex(el => parseInt(el.dataset.index || '-1', 10) === idx);
+            focusIndex = byIdx !== -1 ? byIdx : idx;
+        }
+        if (focusIndex === -1 && focusRequest.text) {
+            const normalized = focusRequest.text.trim().toLowerCase();
+            const byText = allHighlights.findIndex(el => (el.textContent || '').trim().toLowerCase() === normalized);
+            if (byText !== -1) focusIndex = byText;
+        }
+        if (focusIndex !== -1) {
+            matchedHighlight = focusIndex;
+        }
+    }
+
     console.log(`Applied ${appliedCount} of ${highlights.length} highlights`);
     if (appliedCount > 0) {
         toast(`✨ ${appliedCount} highlights applied`);
         const nav = document.getElementById('highlightNav');
         nav.style.display = 'flex';
-        document.getElementById('highlightCount').textContent = `1 of ${allHighlights.length}`;
-        if (allHighlights.length > 0) scrollToHighlight(0);
+        const target = matchedHighlight !== null && matchedHighlight >= 0 ? matchedHighlight : 0;
+        currentHighlightIndex = target;
+        document.getElementById('highlightCount').textContent = `${target + 1} of ${allHighlights.length}`;
+        if (allHighlights.length > 0) scrollToHighlight(target);
+    } else {
+        const nav = document.getElementById('highlightNav');
+        if (nav) nav.style.display = 'none';
     }
     updateInsightsVisibility();
 }
@@ -6339,11 +7306,38 @@ updateActiveBlock();updateHorizon();updateStreak(0);trackWritingSession();
         <div class="overlay-backdrop" id="knowledgeGraphOverlayBackdrop"></div>
         <div class="overlay-content">
             <div id="knowledgeGraphOverlayHeader">
-                <div>
+                <div class="flex flex-col gap-1">
                     <div class="text-sm font-semibold text-emerald-700">Knowledge Graph</div>
                     <div class="text-[11px] text-gray-500" id="knowledgeGraphOverlaySubtitle">Entities connected to your documents</div>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2 justify-end">
+                    <input id="graphSearchInput" type="search" placeholder="Search entities/docs" class="text-[11px] px-2 py-1 rounded-lg border border-emerald-200 focus:outline-none focus:ring-1 focus:ring-emerald-400" style="min-width: 140px;" />
+                    <select id="graphMinLinksSelect" class="text-[11px] px-2 py-1 rounded-lg border border-emerald-200 focus:outline-none focus:ring-1 focus:ring-emerald-400">
+                        <option value="1">All connections</option>
+                        <option value="2">2+ links</option>
+                        <option value="3">3+ links</option>
+                    </select>
+                    <select id="graphMinSharedSelect" class="text-[11px] px-2 py-1 rounded-lg border border-emerald-200 focus:outline-none focus:ring-1 focus:ring-emerald-400">
+                        <option value="1">≥1 shared entity</option>
+                        <option value="2">≥2 shared entities</option>
+                        <option value="3">≥3 shared entities</option>
+                    </select>
+                    <label class="flex items-center gap-1 text-[11px] text-emerald-700">
+                        <input type="checkbox" id="graphIncludeEntities" class="accent-emerald-500" checked>
+                        Entities
+                    </label>
+                    <label class="flex items-center gap-1 text-[11px] text-emerald-700">
+                        <input type="checkbox" id="graphIncludeDocs" class="accent-emerald-500" checked>
+                        Docs
+                    </label>
+                    <label class="flex items-center gap-1 text-[11px] text-emerald-700">
+                        <input type="checkbox" id="graphIncludeDocLinks" class="accent-emerald-500" checked>
+                        Doc links
+                    </label>
+                    <label class="flex items-center gap-1 text-[11px] text-emerald-700">
+                        <input type="checkbox" id="graphRecentOnly" class="accent-emerald-500">
+                        Recent (30d)
+                    </label>
                     <button id="graphRefreshBtn" class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">↻</button>
                     <button id="closeKnowledgeGraphOverlayBtn" class="text-[12px] px-3 py-1 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">Close</button>
                 </div>
@@ -6353,6 +7347,7 @@ updateActiveBlock();updateHorizon();updateStreak(0);trackWritingSession();
                 <div class="legend">
                     <span><span class="legend-dot" style="background: #047857;"></span> Entity</span>
                     <span><span class="legend-dot" style="background: #0ea5e9;"></span> Document</span>
+                    <span><span class="legend-dot" style="background: #f59e0b;"></span> Doc ↔ Doc</span>
                 </div>
                 <div id="knowledgeGraphOverlayInfo" class="flex-1 text-right text-emerald-700"></div>
             </div>

@@ -47,6 +47,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js" integrity="sha512-0fF/nVZgZxI5OGucs5cjox96D65gis6pZeRAgvIJ5zsxFrqOeCzvY4xXHzkwmo7aXstixkmKuuNHYsYvwdivdw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         /* Phase 1: Visual Ergonomics */
         :root { --emerald: #10b981; --cyan: #06b6d4; --purple: #a855f7; --pink: #ec4899; }
@@ -662,6 +663,74 @@
             background: rgba(16,185,129,0.15);
             color: #047857;
         }
+        #knowledgeGraphOverlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            z-index: 200;
+        }
+        #knowledgeGraphOverlay.active {
+            display: block;
+        }
+        #knowledgeGraphOverlay .overlay-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(8px);
+        }
+        #knowledgeGraphOverlay .overlay-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: min(900px, 88vw);
+            height: min(620px, 80vh);
+            background: rgba(255,255,255,0.96);
+            border-radius: 20px;
+            border: 1px solid rgba(16,185,129,0.25);
+            box-shadow: 0 20px 60px rgba(15,118,110,0.22);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #knowledgeGraphOverlayHeader {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(16,185,129,0.18);
+            background: linear-gradient(120deg, rgba(16,185,129,0.12), rgba(6,182,212,0.12));
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        #knowledgeGraphSvg {
+            flex: 1;
+            width: 100%;
+        }
+        #knowledgeGraphOverlayFooter {
+            padding: 12px 20px;
+            border-top: 1px solid rgba(16,185,129,0.1);
+            background: rgba(250, 253, 250, 0.9);
+            font-size: 11px;
+            color: #047857;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        #knowledgeGraphOverlayFooter .legend {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #knowledgeGraphOverlayFooter .legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        #knowledgeGraphOverlayFooter .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+        }
     </style>
 </head>
 <body data-theme="light" class="h-screen w-full font-sans">
@@ -871,6 +940,10 @@
                         <div class="text-[11px] font-semibold text-emerald-600 mb-1">Top entities</div>
                         <div id="userEntityChips" class="flex flex-wrap gap-2"></div>
                         <div id="knowledgeGraphEmpty" class="text-xs text-gray-500 mt-1 hidden">No entities yet. Keep writing or refresh.</div>
+                    </div>
+                    <div id="knowledgeGraphActions" class="flex items-center justify-between text-[11px]">
+                        <button id="openGraphViewBtn" class="px-2 py-1 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">Graph View</button>
+                        <span class="text-gray-400 text-[10px]" id="knowledgeGraphMeta"></span>
                     </div>
                     <div id="entityDetailPanel" class="hidden space-y-2 rounded-xl border border-emerald-200/60 bg-white/90 p-3 shadow-inner">
                         <div class="flex items-start justify-between gap-2">
@@ -1263,6 +1336,8 @@ function loadState() {
             if (!parsed.knowledgeGraph) parsed.knowledgeGraph = {entities: [], lastFetched: 0, loading: false};
             if (!parsed.entityDetailCache) parsed.entityDetailCache = {};
             if (!parsed.userHighlights) parsed.userHighlights = parsed.userHighlights || {};
+            if (!parsed.docCache) parsed.docCache = {};
+            if (!parsed.docFetchMeta) parsed.docFetchMeta = {};
             if (!parsed.ui) parsed.ui = {knowledgeGraphCollapsed: false};
             if (parsed.ui.knowledgeGraphCollapsed === undefined) parsed.ui.knowledgeGraphCollapsed = false;
             if (parsed.activeEntityId === undefined) parsed.activeEntityId = null;
@@ -1374,6 +1449,17 @@ async function loadCloudDocs() {
                     if (d.entities && d.entities.length > 0) {
                         state.docEntities[d.doc_id] = d.entities;
                     }
+                    state.docCache = state.docCache || {};
+                    state.docCache[d.doc_id] = state.docCache[d.doc_id] || {
+                        doc_id: d.doc_id,
+                        filename: d.filename,
+                        summary: d.summary,
+                        content: d.content,
+                        created_at: d.created_at,
+                        updated_at: d.updated_at,
+                        entities: d.entities || [],
+                        media_type: d.media_type
+                    };
                 });
                 
                 if (!state.activeId || !state.docs.find(d => d.id === state.activeId)) {
@@ -1750,6 +1836,10 @@ function render() {
     }
     
     updateInsightsVisibility();
+
+    if (knowledgeGraphOverlayOpen) {
+        renderKnowledgeGraphOverlay();
+    }
 }
 
 function updateStats() {
@@ -1831,9 +1921,20 @@ function updateStats() {
 const KG_CACHE_TTL = 5 * 60 * 1000;
 const KG_DETAIL_TTL = 2 * 60 * 1000;
 const docEntityFetchLocks = {};
+const docFetchLocks = {};
 
 function escapeHtmlAttr(value) {
     return (value || '').replace(/["'\\<>]/g, c => ({'"': '&quot;', "'": '&#39;', '<': '&lt;', '>': '&gt;', '\\': '&#92;'}[c] || c));
+}
+
+function escapeHtml(value) {
+    return (value || '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[c] || c));
 }
 
 function buildEntityChip(entity, source = 'doc') {
@@ -1879,6 +1980,10 @@ function renderDocEntities(doc, {loading = false} = {}) {
     }
 
     const docId = doc.backendId || doc.id;
+    if (doc.entities && doc.entities.length) {
+        if (!state.docEntities) state.docEntities = {};
+        state.docEntities[docId] = doc.entities;
+    }
     const docEntities = state.docEntities?.[docId] || doc.entities || [];
 
     if (loading) {
@@ -2025,6 +2130,9 @@ async function fetchUserEntities(force = false) {
     } finally {
         state.knowledgeGraph.loading = false;
         renderUserEntities();
+        if (knowledgeGraphOverlayOpen) {
+            renderKnowledgeGraphOverlay();
+        }
     }
 }
 
@@ -2034,6 +2142,8 @@ function renderUserEntities() {
     const emptyEl = document.getElementById('knowledgeGraphEmpty');
     const refreshBtn = document.getElementById('refreshKnowledgeGraphBtn');
     const collapseBtn = document.getElementById('collapseKGBtn');
+    const graphBtn = document.getElementById('openGraphViewBtn');
+    const metaEl = document.getElementById('knowledgeGraphMeta');
     if (!panel || !chipsEl || !emptyEl) return;
 
     const entities = state.knowledgeGraph?.entities || [];
@@ -2057,6 +2167,16 @@ function renderUserEntities() {
         return;
     }
     panel.classList.remove('hidden');
+
+    if (graphBtn) {
+        graphBtn.style.display = (entities.length > 0 || loading) ? 'inline-flex' : 'none';
+        graphBtn.disabled = loading || entities.length === 0;
+    }
+    if (metaEl) {
+        if (loading) metaEl.textContent = 'Loading…';
+        else if (entities.length > 0) metaEl.textContent = `${entities.length} entit${entities.length === 1 ? 'y' : 'ies'}`;
+        else metaEl.textContent = '';
+    }
 
     if (loading) {
         emptyEl.classList.remove('hidden');
@@ -2197,6 +2317,21 @@ async function showEntityDetail(entityId, source = 'doc') {
         if (res.ok) {
             const detail = await res.json();
             state.entityDetailCache[entityId] = {detail, cachedAt: Date.now()};
+            if (detail?.documents && detail.documents.length) {
+                state.docCache = state.docCache || {};
+                detail.documents.forEach(doc => {
+                    if (!doc || !doc.doc_id || state.docCache[doc.doc_id]) return;
+                    state.docCache[doc.doc_id] = {
+                        doc_id: doc.doc_id,
+                        filename: doc.title || doc.doc_id,
+                        summary: doc.summary,
+                        created_at: doc.created_at,
+                        content: doc.summary || '',
+                        entities: [],
+                        media_type: doc.media_type
+                    };
+                });
+            }
             state.activeEntityId = entityId;
             renderEntityDetail(detail);
             return;
@@ -2230,18 +2365,334 @@ function hideEntityHoverCard() {
     if (card) card.classList.remove('visible');
 }
 
-window.openDocFromEntity = (docId) => {
+function hydrateDocFromResponse(data) {
+    if (!data) return null;
+    const docId = data.doc_id;
+    const filename = data.filename || docId || 'Document';
+    let content = data.content || '';
+    const hasHtml = /<(div|p|br|span|h[1-6]|ul|ol|li|table|section|article)[^>]*>/i.test(content);
+    if (!hasHtml) {
+        content = escapeHtml(content).replace(/\n/g, '<br>');
+    }
+    const doc = {
+        id: docId,
+        backendId: docId,
+        name: filename,
+        content,
+        plainText: data.content || '',
+        summary: data.summary || '',
+        questions: data.questions || [],
+        isPdf: data.media_type === 'application/pdf',
+        media_type: data.media_type,
+        updated_at: data.updated_at || data.created_at,
+        created_at: data.created_at,
+        entities: data.entities || []
+    };
+    return doc;
+}
+
+function addDocToState(doc, rawData) {
+    if (!doc) return null;
+    let existing = state.docs.find(d => (d.backendId || d.id) === doc.id);
+    if (existing) {
+        Object.assign(existing, doc);
+        existing.backendId = existing.backendId || doc.id;
+        if (rawData?.entities) existing.entities = rawData.entities;
+        return existing;
+    }
+    state.docs.push(doc);
+    return doc;
+}
+
+async function ensureDocLoaded(docId, {silent = false} = {}) {
+    if (!docId) return null;
+    let doc = state.docs.find(d => (d.backendId || d.id) === docId);
+    if (doc) return doc;
+
+    if (state.docCache && state.docCache[docId]) {
+        doc = hydrateDocFromResponse(state.docCache[docId]);
+        addDocToState(doc, state.docCache[docId]);
+        if (state.docEntities) state.docEntities[docId] = state.docCache[docId].entities || [];
+        return doc;
+    }
+
+    if (!state.user || state.user.isGuest) {
+        if (!silent) toast('Sign in to open this document from the knowledge graph.', true);
+        return null;
+    }
+
+    if (docFetchLocks[docId]) {
+        try {
+            return await docFetchLocks[docId];
+        } catch (err) {
+            return null;
+        }
+    }
+
+    const fetchPromise = (async () => {
+        try {
+            const headers = {'Content-Type': 'application/json'};
+            if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+            const res = await fetch(`${API}/dev/documents/${encodeURIComponent(docId)}?user_id=${encodeURIComponent(state.user.sub)}`, {headers});
+            if (!res.ok) {
+                if (!silent) toast('Unable to load document metadata.', true);
+                return null;
+            }
+            const data = await res.json();
+            state.docCache = state.docCache || {};
+            state.docCache[docId] = data;
+            state.docFetchMeta = state.docFetchMeta || {};
+            state.docFetchMeta[docId] = {fetchedAt: Date.now()};
+            if (!state.docEntities) state.docEntities = {};
+            state.docEntities[docId] = data.entities || [];
+            const hydrated = hydrateDocFromResponse(data);
+            return addDocToState(hydrated, data);
+        } catch (error) {
+            console.warn('Document fetch failed', error);
+            if (!silent) toast('Unable to load document metadata.', true);
+            return null;
+        } finally {
+            delete docFetchLocks[docId];
+        }
+    })();
+
+    docFetchLocks[docId] = fetchPromise;
+    return await fetchPromise;
+}
+
+window.openDocFromEntity = async (docId) => {
     if (!docId) return;
-    const targetDoc = state.docs.find(d => (d.backendId || d.id) === docId);
+    let targetDoc = state.docs.find(d => (d.backendId || d.id) === docId);
     if (!targetDoc) {
-        toast('Document not loaded in this workspace yet.', true);
-        return;
+        const fetched = await ensureDocLoaded(docId);
+        if (!fetched) return;
+        targetDoc = fetched;
+        saveState();
     }
     if (state.activeId !== targetDoc.id) {
-        setActive(targetDoc.id);
+        state.activeId = targetDoc.id;
+        render();
+        saveState();
         toast(`📄 Switched to ${targetDoc.name}`, true);
     }
 };
+
+let knowledgeGraphOverlayOpen = false;
+let knowledgeGraphSimulation = null;
+
+function buildKnowledgeGraphData() {
+    const entities = state.knowledgeGraph?.entities || [];
+    const docCounts = {};
+    const docMeta = new Map();
+    const nodes = [];
+    const links = [];
+
+    entities.forEach(entity => {
+        const docIds = entity.doc_ids || [];
+        nodes.push({
+            id: `entity:${entity.entity_id}`,
+            rawId: entity.entity_id,
+            label: entity.name || entity.entity_id,
+            type: 'entity',
+            weight: entity.doc_count || docIds.length || 1
+        });
+        docIds.forEach(docId => {
+            docCounts[docId] = (docCounts[docId] || 0) + 1;
+            links.push({
+                source: `entity:${entity.entity_id}`,
+                target: `doc:${docId}`,
+                rawDocId: docId
+            });
+        });
+    });
+
+    const cacheSources = [];
+    if (state.entityDetailCache) {
+        Object.values(state.entityDetailCache).forEach(entry => {
+            const detail = entry?.detail;
+            if (detail?.documents) cacheSources.push(...detail.documents);
+        });
+    }
+
+    cacheSources.forEach(doc => {
+        if (doc && doc.doc_id && !docCounts[doc.doc_id]) {
+            docCounts[doc.doc_id] = 0;
+        }
+    });
+
+    Object.keys(docCounts).forEach(docId => {
+        const doc = state.docs.find(d => (d.backendId || d.id) === docId);
+        const cached = state.docCache?.[docId];
+        const detailDoc = cacheSources.find(d => d.doc_id === docId);
+        const label = doc?.name || cached?.filename || detailDoc?.title || docId;
+        docMeta.set(docId, {
+            label,
+            summary: doc?.summary || cached?.summary || detailDoc?.summary || '',
+            created_at: doc?.created_at || cached?.created_at || detailDoc?.created_at
+        });
+        nodes.push({
+            id: `doc:${docId}`,
+            rawId: docId,
+            label,
+            type: 'doc',
+            weight: docCounts[docId] || 1
+        });
+    });
+
+    return {
+        nodes,
+        links,
+        stats: {
+            entityCount: entities.length,
+            docCount: Object.keys(docCounts).length,
+            linkCount: links.length
+        },
+        docMeta
+    };
+}
+
+async function openKnowledgeGraphOverlay(options = {}) {
+    if (typeof d3 === 'undefined') {
+        toast('Graph view requires D3. Please refresh the page.', true);
+        return;
+    }
+    const {forceRefresh = false} = options;
+    if (forceRefresh || !state.knowledgeGraph?.entities?.length) {
+        await fetchUserEntities(true);
+    }
+    const overlay = document.getElementById('knowledgeGraphOverlay');
+    if (!overlay) return;
+    overlay.classList.add('active');
+    knowledgeGraphOverlayOpen = true;
+    renderKnowledgeGraphOverlay();
+}
+
+function closeKnowledgeGraphOverlay() {
+    const overlay = document.getElementById('knowledgeGraphOverlay');
+    if (!overlay) return;
+    overlay.classList.remove('active');
+    knowledgeGraphOverlayOpen = false;
+    if (knowledgeGraphSimulation) {
+        knowledgeGraphSimulation.stop();
+        knowledgeGraphSimulation = null;
+    }
+}
+
+function renderKnowledgeGraphOverlay() {
+    const overlay = document.getElementById('knowledgeGraphOverlay');
+    if (!overlay || !knowledgeGraphOverlayOpen) return;
+    const svgEl = document.getElementById('knowledgeGraphSvg');
+    const infoEl = document.getElementById('knowledgeGraphOverlayInfo');
+    const subtitleEl = document.getElementById('knowledgeGraphOverlaySubtitle');
+    if (!svgEl) return;
+
+    const {nodes, links, stats} = buildKnowledgeGraphData();
+    const hasData = nodes.length > 0 && links.length > 0;
+    if (subtitleEl) {
+        subtitleEl.textContent = hasData ? 'Entities connected to your documents' : 'Knowledge graph will grow as you tag more entities.';
+    }
+    if (!hasData) {
+        svgEl.innerHTML = '<foreignObject x="0" y="0" width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="height:100%;display:flex;align-items:center;justify-content:center;color:#047857;font-size:12px;">Add more entities across documents to visualize your knowledge graph.</div></foreignObject>';
+        if (infoEl) infoEl.textContent = '';
+        return;
+    }
+
+    const rect = svgEl.getBoundingClientRect();
+    const width = rect.width || 760;
+    const height = rect.height || 520;
+
+    svgEl.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    const svg = d3.select(svgEl);
+    svg.selectAll('*').remove();
+
+    nodes.forEach(node => {
+        const base = node.type === 'entity' ? 24 : 16;
+        node.radius = Math.max(base, Math.min(base + (node.weight || 1) * 4, 46));
+    });
+
+    knowledgeGraphSimulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id).distance(d => d.rawDocId ? 140 : 110).strength(0.6))
+        .force('charge', d3.forceManyBody().strength(-320))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(d => d.radius + 12));
+
+    const link = svg.append('g')
+        .attr('stroke', 'rgba(14,116,144,0.3)')
+        .attr('stroke-width', 1.4)
+        .selectAll('line')
+        .data(links)
+        .enter()
+        .append('line');
+
+    const node = svg.append('g')
+        .selectAll('g')
+        .data(nodes)
+        .enter()
+        .append('g')
+        .call(d3.drag()
+            .on('start', (event, d) => {
+                if (!event.active) knowledgeGraphSimulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            })
+            .on('drag', (event, d) => {
+                d.fx = event.x;
+                d.fy = event.y;
+            })
+            .on('end', (event, d) => {
+                if (!event.active) knowledgeGraphSimulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            })
+        );
+
+    node.append('circle')
+        .attr('r', d => d.radius)
+        .attr('fill', d => d.type === 'entity' ? '#047857' : '#0ea5e9')
+        .attr('fill-opacity', 0.9)
+        .attr('stroke', 'white')
+        .attr('stroke-width', 2);
+
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', d => d.type === 'entity' ? d.radius + 14 : d.radius + 12)
+        .attr('fill', '#0f172a')
+        .attr('font-size', '11px')
+        .attr('font-weight', d => d.type === 'entity' ? 600 : 500)
+        .text(d => d.label.length > 24 ? `${d.label.slice(0, 24)}…` : d.label);
+
+    node.append('title').text(d => {
+        return d.type === 'entity'
+            ? `${d.label} • ${d.weight || 0} doc${(d.weight || 0) === 1 ? '' : 's'}`
+            : `${d.label} • ${d.weight || 0} entit${(d.weight || 0) === 1 ? 'y' : 'ies'}`;
+    });
+
+    node.on('click', (event, d) => {
+        event.preventDefault();
+        if (d.type === 'entity') {
+            showEntityDetail(d.rawId, 'global');
+        } else {
+            openDocFromEntity(d.rawId);
+        }
+    });
+
+    knowledgeGraphSimulation.on('tick', () => {
+        node.attr('transform', d => {
+            d.x = Math.max(d.radius + 10, Math.min(width - d.radius - 10, d.x));
+            d.y = Math.max(d.radius + 10, Math.min(height - d.radius - 10, d.y));
+            return `translate(${d.x},${d.y})`;
+        });
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+    });
+
+    if (infoEl) {
+        infoEl.textContent = `${stats.entityCount} entit${stats.entityCount === 1 ? 'y' : 'ies'} • ${stats.docCount} document${stats.docCount === 1 ? '' : 's'} • ${stats.linkCount} connection${stats.linkCount === 1 ? '' : 's'}`;
+    }
+}
 
 function attachAllEvents() {
     console.log('Attaching all event handlers...');
@@ -2284,6 +2735,14 @@ function attachAllEvents() {
         if (doc) ensureDocEntities(doc, true);
     });
     on('refreshKnowledgeGraphBtn', 'onclick', () => fetchUserEntities(true));
+    on('openGraphViewBtn', 'onclick', () => openKnowledgeGraphOverlay());
+    on('graphRefreshBtn', 'onclick', async () => {
+        await fetchUserEntities(true);
+        renderKnowledgeGraphOverlay();
+    });
+    on('closeKnowledgeGraphOverlayBtn', 'onclick', () => closeKnowledgeGraphOverlay());
+    const graphBackdrop = document.getElementById('knowledgeGraphOverlayBackdrop');
+    if (graphBackdrop) graphBackdrop.onclick = () => closeKnowledgeGraphOverlay();
     on('collapseKGBtn', 'onclick', () => {
         const btn = document.getElementById('collapseKGBtn');
         const collapsed = (btn?.dataset.state || 'open') === 'open';
@@ -2527,6 +2986,12 @@ document.addEventListener('mouseleave', (event) => {
         hideEntityHoverCard();
     }
 }, true);
+
+document.addEventListener('keydown', (event) => {
+    if (knowledgeGraphOverlayOpen && event.key === 'Escape') {
+        closeKnowledgeGraphOverlay();
+    }
+});
 
 function createNewDoc() {
     const isPremiumUser = state.user?.sub === 'f4486468-b0f1-70ed-c84c-385c4fecbc7c';
@@ -5870,6 +6335,30 @@ function restoreHighlights(){const highlights=state.userHighlights[state.activeI
 // Initialize
 updateActiveBlock();updateHorizon();updateStreak(0);trackWritingSession();
     </script>
+    <div id="knowledgeGraphOverlay">
+        <div class="overlay-backdrop" id="knowledgeGraphOverlayBackdrop"></div>
+        <div class="overlay-content">
+            <div id="knowledgeGraphOverlayHeader">
+                <div>
+                    <div class="text-sm font-semibold text-emerald-700">Knowledge Graph</div>
+                    <div class="text-[11px] text-gray-500" id="knowledgeGraphOverlaySubtitle">Entities connected to your documents</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="graphRefreshBtn" class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">↻</button>
+                    <button id="closeKnowledgeGraphOverlayBtn" class="text-[12px] px-3 py-1 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">Close</button>
+                </div>
+            </div>
+            <svg id="knowledgeGraphSvg"></svg>
+            <div id="knowledgeGraphOverlayFooter">
+                <div class="legend">
+                    <span><span class="legend-dot" style="background: #047857;"></span> Entity</span>
+                    <span><span class="legend-dot" style="background: #0ea5e9;"></span> Document</span>
+                </div>
+                <div id="knowledgeGraphOverlayInfo" class="flex-1 text-right text-emerald-700"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="entityHoverCard"></div>
 </body>
 </html>

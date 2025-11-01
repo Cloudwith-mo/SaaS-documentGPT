@@ -326,6 +326,55 @@ def lambda_handler(event, context):
                 })
             }
 
+        if path.startswith('/dev/documents/') and method == 'GET':
+            user_id = query_params.get('user_id') or query_params.get('userId')
+            if not user_id:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Missing user_id'})
+                }
+
+            parts = path.rstrip('/').split('/')
+            if len(parts) < 4:
+                return {
+                    'statusCode': 404,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Document not found'})
+                }
+
+            doc_id = parts[3]
+            docs_table = dynamodb.Table(DOC_TABLE)
+            response_item = docs_table.get_item(Key={'pk': f'USER#{user_id}', 'sk': f'DOC#{doc_id}'})
+            item = response_item.get('Item') if isinstance(response_item, dict) else None
+            if not item:
+                return {
+                    'statusCode': 404,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Document not found'})
+                }
+
+            payload = {
+                'doc_id': item.get('doc_id') or doc_id,
+                'filename': item.get('filename') or item.get('doc_id'),
+                'summary': item.get('summary', ''),
+                'questions': item.get('questions', []),
+                'content': item.get('content', ''),
+                'media_type': item.get('media_type'),
+                'entities': item.get('entities', []),
+                'processing_status': item.get('processing_status'),
+                'created_at': item.get('created_at'),
+                'updated_at': item.get('updated_at'),
+            }
+            if 'chat_history' in item:
+                payload['chat_history'] = item.get('chat_history') or []
+
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps(payload, cls=DecimalEncoder)
+            }
+
         if path == '/dev/knowledge-graph/entities' and method == 'GET':
             user_id = query_params.get('user_id') or query_params.get('userId')
             if not user_id:

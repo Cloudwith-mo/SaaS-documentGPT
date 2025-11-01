@@ -50,11 +50,45 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.COGNITO_REGION }}
+
+      - name: Generate Cognito bearer
+        id: bearer
+        env:
+          COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
+          COGNITO_CLIENT_SECRET: ${{ secrets.COGNITO_CLIENT_SECRET }}
+          COGNITO_USERNAME: ${{ secrets.COGNITO_USERNAME }}
+          COGNITO_PASSWORD: ${{ secrets.COGNITO_PASSWORD }}
+          COGNITO_REGION: ${{ secrets.COGNITO_REGION }}
+        run: |
+          SECRET_HASH=$(python3 - <<'PY'
+import base64, hmac, hashlib, os
+username = os.environ["COGNITO_USERNAME"]
+client_id = os.environ["COGNITO_CLIENT_ID"]
+client_secret = os.environ["COGNITO_CLIENT_SECRET"]
+digest = hmac.new(client_secret.encode(), (username + client_id).encode(), hashlib.sha256).digest()
+print(base64.b64encode(digest).decode())
+PY
+          )
+          ID_TOKEN=$(aws cognito-idp initiate-auth \
+            --auth-flow USER_PASSWORD_AUTH \
+            --client-id "$COGNITO_CLIENT_ID" \
+            --auth-parameters USERNAME="$COGNITO_USERNAME",PASSWORD="$COGNITO_PASSWORD",SECRET_HASH="$SECRET_HASH" \
+            --region "$COGNITO_REGION" \
+            --query 'AuthenticationResult.IdToken' \
+            --output text)
+          echo "token=$ID_TOKEN" >> "$GITHUB_OUTPUT"
+
       - name: Run k6 smoke test
         uses: grafana/k6-action@v0.3.1
         with:
           filename: k6/smoke.js
         env:
           BASE_URL: ${{ secrets.BASE_URL }}
-          BEARER: ${{ secrets.BEARER }}
+          BEARER: ${{ steps.bearer.outputs.token }}
           USER: ${{ secrets.TEST_USER }}

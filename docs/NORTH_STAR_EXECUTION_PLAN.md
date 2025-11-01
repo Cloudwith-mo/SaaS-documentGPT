@@ -1,6 +1,6 @@
 # DocumentGPT North Star Execution Plan
 
-_Last updated: 1 Nov 2025 · 00:08 UTC_
+_Last updated: 1 Nov 2025 · 00:23 UTC_
 
 This tracker converts the migration roadmap into actionable, sequential tasks. Update statuses as you progress. Each epic is broken into weekly work packets sized for a single engineer.
 

@@ -1,6 +1,6 @@
 # DocumentGPT North Star Execution Plan
 
-_Last updated: 1 Nov 2025 · 00:23 UTC_
+_Last updated: 1 Nov 2025 · 00:24 UTC_
 
 This tracker converts the migration roadmap into actionable, sequential tasks. Update statuses as you progress. Each epic is broken into weekly work packets sized for a single engineer.
 
@@ -141,6 +141,7 @@ Legend: ☐ todo · ☐⚙ in progress · ☑ done
 - Weekly digest/dashboard pytest coverage
 - Known benign warnings: PyPDF2 deprecation (scheduled for dependency sweep in Phase 3).
 - Manual API sanity: `curl -fsSL -H "Authorization: Bearer $BEARER" -H "X-DocGPT-State: $(printf '{"'"'"docs"'"'":0,"'"'"tags"'"'":0}' | base64)" "https://9voqzgx3ch.execute-api.us-east-1.amazonaws.com/prod/dev/system-health?userId=$TEST_USER"`
+- CI bearer auto-refresh: handled in `.github/workflows/mini-e2e-health.yml` via Cognito `USER_PASSWORD_AUTH` flow each run.
 
 ---
 

@@ -569,6 +569,99 @@
         
         /* Autocomplete Ghost Text */
         .ghost-text{color:#9ca3af;opacity:0.5;pointer-events:none;user-select:none;}
+        /* Knowledge Graph UI */
+        .entity-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            border: 1px solid rgba(16,185,129,0.2);
+            background: rgba(16,185,129,0.08);
+            color: #047857;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+        }
+        .entity-chip[data-source="global"] {
+            background: rgba(6,182,212,0.08);
+            color: #0e7490;
+            border-color: rgba(6,182,212,0.2);
+        }
+        .entity-chip:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(16,185,129,0.12);
+        }
+        .entity-chip[data-source="global"]:hover {
+            box-shadow: 0 6px 14px rgba(6,182,212,0.12);
+        }
+        .entity-spark {
+            width: 6px;
+            height: 6px;
+            border-radius: 9999px;
+            background: currentColor;
+            opacity: 0.5;
+        }
+        .entity-inline {
+            background: linear-gradient(120deg, rgba(16,185,129,0.12), rgba(6,182,212,0.1));
+            border-radius: 6px;
+            padding: 0 4px;
+            cursor: pointer;
+            transition: background 0.15s ease, box-shadow 0.15s ease;
+            border-bottom: 1px dotted rgba(16,185,129,0.4);
+        }
+        .entity-inline:hover {
+            background: linear-gradient(120deg, rgba(16,185,129,0.2), rgba(6,182,212,0.18));
+            box-shadow: 0 0 0 2px rgba(16,185,129,0.1);
+        }
+        #entityHoverCard {
+            position: fixed;
+            pointer-events: none;
+            z-index: 200;
+            background: rgba(255,255,255,0.98);
+            backdrop-filter: blur(18px);
+            border: 1px solid rgba(16,185,129,0.15);
+            box-shadow: 0 12px 34px rgba(15,118,110,0.16);
+            border-radius: 14px;
+            padding: 10px 12px;
+            font-size: 11px;
+            color: #065f46;
+            min-width: 180px;
+            max-width: 260px;
+            opacity: 0;
+            transform: translateY(4px);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        #entityHoverCard.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        #entityDetailPanel .entity-doc-link {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(16,185,129,0.15);
+            background: rgba(255,255,255,0.92);
+            font-size: 12px;
+            cursor: pointer;
+            transition: border 0.2s ease, transform 0.2s ease;
+        }
+        #entityDetailPanel .entity-doc-link:hover {
+            border-color: rgba(16,185,129,0.4);
+            transform: translateY(-1px);
+        }
+        .graph-pill {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: rgba(16,185,129,0.15);
+            color: #047857;
+        }
     </style>
 </head>
 <body data-theme="light" class="h-screen w-full font-sans">
@@ -726,6 +819,18 @@
                             <div class="flex-1"></div>
                             <button id="toneBtn" class="px-3 py-1 text-xs hover:bg-emerald-50 rounded-lg border border-emerald-300 text-emerald-600 font-semibold" title="Adjust Tone">✨ Tone</button>
                         </div>
+                        <div id="docEntityChipBar" class="px-6 py-2 border-t border-b border-emerald-100/60 bg-emerald-50/30 hidden">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">Knowledge Graph</div>
+                                <button id="refreshDocEntitiesBtn" class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">
+                                    ↻ Refresh
+                                </button>
+                            </div>
+                            <div id="docEntityChipList" class="flex flex-wrap gap-2"></div>
+                            <div id="docEntityEmpty" class="text-xs text-gray-500 hidden">
+                                No entities detected yet. Add more detail or refresh after saving.
+                            </div>
+                        </div>
                         <div id="editor" contenteditable="true" class="flex-1 overflow-auto px-6 py-4 text-base leading-7 outline-none"></div>
                         <div id="docStatsBar" class="px-4 py-2 border-t flex gap-4 text-xs opacity-60" style="background: linear-gradient(135deg, rgba(16,185,129,0.03), rgba(6,182,212,0.03)); border-color: rgba(16,185,129,0.1);">
                             <span>Words: <b id="wordCount">0</b>/<b id="dailyGoal">500</b></span>
@@ -751,6 +856,36 @@
                 <div class="flex items-center gap-2">
                     <button id="focusBtn" class="text-xs px-2 py-1 rounded-lg border hover:bg-gray-50" data-tooltip="Focus Mode" title="Focus Mode">👁️</button>
                     <button id="modeToggle" class="text-xs px-2 py-1 rounded-lg border border-cyan-500 text-cyan-500 hover:bg-cyan-50" title="Toggle mode">📊 Research</button>
+                </div>
+            </div>
+            <div id="knowledgeGraphSidebar" class="px-3 py-3 border-b hidden" style="background: rgba(236, 253, 245, 0.55);">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">Knowledge Graph</span>
+                    <div class="flex items-center gap-2">
+                        <button id="refreshKnowledgeGraphBtn" class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">↻</button>
+                        <button id="collapseKGBtn" class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50" data-state="open">Hide</button>
+                    </div>
+                </div>
+                <div id="knowledgeGraphBody" class="space-y-3 mt-3">
+                    <div>
+                        <div class="text-[11px] font-semibold text-emerald-600 mb-1">Top entities</div>
+                        <div id="userEntityChips" class="flex flex-wrap gap-2"></div>
+                        <div id="knowledgeGraphEmpty" class="text-xs text-gray-500 mt-1 hidden">No entities yet. Keep writing or refresh.</div>
+                    </div>
+                    <div id="entityDetailPanel" class="hidden space-y-2 rounded-xl border border-emerald-200/60 bg-white/90 p-3 shadow-inner">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <div id="entityDetailName" class="text-sm font-semibold text-emerald-700"></div>
+                                <div id="entityDetailMeta" class="text-[11px] text-gray-500"></div>
+                            </div>
+                            <button id="closeEntityDetail" class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50">✕</button>
+                        </div>
+                        <div id="entityDetailMentions" class="text-[11px] text-gray-600 leading-relaxed"></div>
+                        <div>
+                            <div class="text-[11px] font-semibold text-emerald-600 mb-1">Appears in</div>
+                            <div id="entityDetailDocs" class="space-y-2"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div id="chatMessages" class="flex-1 overflow-auto p-3 space-y-2">
@@ -1121,6 +1256,16 @@ function loadState() {
             // Always use current CONFIG limits, not saved ones
             parsed.limits = {chats: CONFIG.CHAT_LIMIT, documents: CONFIG.DOC_LIMIT};
             if (!parsed.streak) parsed.streak = {count: 0, lastDate: null, dailyGoal: 500, todayWords: 0};
+            if (!parsed.docEntities) parsed.docEntities = {};
+            if (!parsed.docInsights) parsed.docInsights = parsed.docInsights || {};
+            if (!parsed.docHighlights) parsed.docHighlights = parsed.docHighlights || {};
+            if (!parsed.chatHistory) parsed.chatHistory = parsed.chatHistory || {};
+            if (!parsed.knowledgeGraph) parsed.knowledgeGraph = {entities: [], lastFetched: 0, loading: false};
+            if (!parsed.entityDetailCache) parsed.entityDetailCache = {};
+            if (!parsed.userHighlights) parsed.userHighlights = parsed.userHighlights || {};
+            if (!parsed.ui) parsed.ui = {knowledgeGraphCollapsed: false};
+            if (parsed.ui.knowledgeGraphCollapsed === undefined) parsed.ui.knowledgeGraphCollapsed = false;
+            if (parsed.activeEntityId === undefined) parsed.activeEntityId = null;
             return parsed;
         } catch (e) {
             console.error('Failed to parse saved state:', e);
@@ -1134,7 +1279,16 @@ function loadState() {
         limits: {chats: CONFIG.CHAT_LIMIT, documents: CONFIG.DOC_LIMIT},
         zoom: 1,
         focus: false,
-        streak: {count: 0, lastDate: null, dailyGoal: 500, todayWords: 0}
+        streak: {count: 0, lastDate: null, dailyGoal: 500, todayWords: 0},
+        docEntities: {},
+        docInsights: {},
+        docHighlights: {},
+        chatHistory: {},
+        knowledgeGraph: {entities: [], lastFetched: 0, loading: false},
+        entityDetailCache: {},
+        userHighlights: {},
+        ui: {knowledgeGraphCollapsed: false},
+        activeEntityId: null
     };
 }
 
@@ -1208,13 +1362,17 @@ async function loadCloudDocs() {
                     summary: d.summary || '',
                     questions: d.questions || [],
                     isPdf: d.isPdf || false,
-                    updated_at: d.created_at || d.updated_at
+                    updated_at: d.created_at || d.updated_at,
+                    entities: d.entities || []
                 }));
                 
                 // Restore chat history
                 data.documents.forEach(d => {
                     if (d.chat_history && d.chat_history.length > 0) {
                         state.chatHistory[d.doc_id] = d.chat_history;
+                    }
+                    if (d.entities && d.entities.length > 0) {
+                        state.docEntities[d.doc_id] = d.entities;
                     }
                 });
                 
@@ -1223,6 +1381,7 @@ async function loadCloudDocs() {
                 }
                 saveState();
                 toast('☁️ Loaded from cloud', true);
+                fetchUserEntities(true);
             }
         }
     } catch (e) {
@@ -1319,6 +1478,7 @@ async function initAuth() {
                 state.user = {email: payload.email, sub: payload.sub, name: payload.name};
                 await loadUsage();
                 await loadCloudDocs();
+                await fetchUserEntities(true);
                 updateAuthUI();
                 return;
             }
@@ -1330,6 +1490,7 @@ async function initAuth() {
     state.user = {email: 'guest@documentgpt.io', sub: guestId, isGuest: true};
     authToken = null;
     await loadUsage();
+    renderUserEntities();
     updateAuthUI();
 }
 
@@ -1443,11 +1604,23 @@ async function loadUsage() {
 
 function render() {
     const doc = state.docs.find(d => d.id === state.activeId);
+    if (!doc) return;
     const editor = document.getElementById('editor');
     editor.innerHTML = doc.content;
     
     // Restore highlights after render
     restoreHighlights();
+    
+    renderDocEntities(doc);
+    ensureDocEntities(doc);
+    if (state.user && !state.user.isGuest) {
+        fetchUserEntities();
+    } else {
+        renderUserEntities();
+    }
+    if (state.activeEntityId && state.entityDetailCache?.[state.activeEntityId]) {
+        renderEntityDetail(state.entityDetailCache[state.activeEntityId].detail);
+    }
     
     // Make PDFs read-only and show menu
     const pdfMenu = document.getElementById('pdfMenu');
@@ -1655,6 +1828,421 @@ function updateStats() {
     if (modeLabelEl) modeLabelEl.textContent = loadSettings().journalMode ? 'Journal' : 'Research';
 }
 
+const KG_CACHE_TTL = 5 * 60 * 1000;
+const KG_DETAIL_TTL = 2 * 60 * 1000;
+const docEntityFetchLocks = {};
+
+function escapeHtmlAttr(value) {
+    return (value || '').replace(/["'\\<>]/g, c => ({'"': '&quot;', "'": '&#39;', '<': '&lt;', '>': '&gt;', '\\': '&#92;'}[c] || c));
+}
+
+function buildEntityChip(entity, source = 'doc') {
+    const mention = entity.mentions && entity.mentions.length > 0 ? entity.mentions[0] : '';
+    const metrics = source === 'doc'
+        ? `<span class=\"graph-pill\">${Math.round((entity.salience || 0) * 100)}%</span>`
+        : `<span class=\"graph-pill\">${entity.doc_count || 0} docs</span>`;
+    return `<span class=\"entity-chip\" data-entity-id=\"${escapeHtmlAttr(entity.entity_id)}\" data-entity-source=\"${source}\" data-entity-mention=\"${escapeHtmlAttr(mention)}\">` +
+        `<span class=\"entity-spark\"></span>${escapeHtmlAttr(entity.name || 'Unknown')} ${metrics}</span>`;
+}
+
+function setKnowledgeGraphCollapsed(collapsed) {
+    const body = document.getElementById('knowledgeGraphBody');
+    const collapseBtn = document.getElementById('collapseKGBtn');
+    if (!body || !collapseBtn) return;
+    const alreadyCollapsed = body.classList.contains('hidden');
+    if (collapsed) {
+        body.classList.add('hidden');
+        collapseBtn.dataset.state = 'closed';
+        collapseBtn.textContent = 'Show';
+    } else {
+        body.classList.remove('hidden');
+        collapseBtn.dataset.state = 'open';
+        collapseBtn.textContent = 'Hide';
+    }
+    if (!state.ui) state.ui = {};
+    const prev = state.ui.knowledgeGraphCollapsed;
+    state.ui.knowledgeGraphCollapsed = collapsed;
+    if (prev !== collapsed || alreadyCollapsed !== collapsed) {
+        saveState();
+    }
+}
+
+function renderDocEntities(doc, {loading = false} = {}) {
+    const bar = document.getElementById('docEntityChipBar');
+    const listEl = document.getElementById('docEntityChipList');
+    const emptyEl = document.getElementById('docEntityEmpty');
+    if (!bar || !listEl || !emptyEl) return;
+
+    if (!doc) {
+        bar.classList.add('hidden');
+        return;
+    }
+
+    const docId = doc.backendId || doc.id;
+    const docEntities = state.docEntities?.[docId] || doc.entities || [];
+
+    if (loading) {
+        bar.classList.remove('hidden');
+        emptyEl.classList.add('hidden');
+        listEl.innerHTML = '<div class="flex gap-2">' +
+            '<div class="h-6 w-20 rounded-full bg-emerald-100 animate-pulse"></div>' +
+            '<div class="h-6 w-24 rounded-full bg-emerald-100 animate-pulse"></div>' +
+            '<div class="h-6 w-16 rounded-full bg-emerald-100 animate-pulse"></div>' +
+            '</div>';
+        return;
+    }
+
+    if (!docEntities || docEntities.length === 0) {
+        bar.classList.remove('hidden');
+        listEl.innerHTML = '';
+        emptyEl.classList.remove('hidden');
+        applyEntityLinks(doc, []);
+        return;
+    }
+
+    const topEntities = [...docEntities].sort((a, b) => (b.salience || 0) - (a.salience || 0)).slice(0, 20);
+    listEl.innerHTML = topEntities.map(entity => buildEntityChip(entity, 'doc')).join('');
+    emptyEl.classList.add('hidden');
+    bar.classList.remove('hidden');
+    requestAnimationFrame(() => applyEntityLinks(doc, topEntities));
+}
+
+function applyEntityLinks(doc, entities) {
+    const editor = document.getElementById('editor');
+    if (!editor) return;
+
+    // Clear previous links
+    editor.querySelectorAll('.entity-inline').forEach(span => {
+        const parent = span.parentNode;
+        while (span.firstChild) parent.insertBefore(span.firstChild, span);
+        parent.removeChild(span);
+    });
+
+    if (!entities || entities.length === 0) return;
+
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, null);
+    const nodes = [];
+    while (walker.nextNode()) {
+        nodes.push(walker.currentNode);
+    }
+
+    const linkedEntities = new Set();
+
+    entities.forEach(entity => {
+        if (linkedEntities.has(entity.entity_id)) return;
+        const candidates = [...(entity.mentions || []), entity.name].filter(Boolean);
+        for (const phrase of candidates) {
+            const trimmed = (phrase || '').trim();
+            if (!trimmed || trimmed.length > 200) continue;
+            const regex = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+            for (const node of nodes) {
+                if (!node.parentElement || node.parentElement.closest('.entity-inline')) continue;
+                const text = node.textContent;
+                const match = regex.exec(text);
+                if (match) {
+                    const range = document.createRange();
+                    range.setStart(node, match.index);
+                    range.setEnd(node, match.index + match[0].length);
+                    const span = document.createElement('span');
+                    span.className = 'entity-inline';
+                    span.dataset.entityId = entity.entity_id;
+                    span.dataset.entitySource = 'doc';
+                    span.dataset.entityMention = trimmed;
+                    span.textContent = match[0];
+                    range.deleteContents();
+                    range.insertNode(span);
+                    linkedEntities.add(entity.entity_id);
+                    break;
+                }
+            }
+            if (linkedEntities.has(entity.entity_id)) break;
+        }
+    });
+}
+
+async function ensureDocEntities(doc, force = false) {
+    if (!doc) return;
+    const docId = doc.backendId || doc.id;
+    if (!docId) return;
+
+    if (!force && state.docEntities && state.docEntities[docId]) {
+        renderDocEntities(doc);
+        return;
+    }
+
+    if (docEntityFetchLocks[docId]) {
+        return;
+    }
+    docEntityFetchLocks[docId] = true;
+    renderDocEntities(doc, {loading: true});
+
+    try {
+        const headers = {'Content-Type': 'application/json'};
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+        const res = await fetch(`${API}/dev/knowledge-graph/docs/${encodeURIComponent(docId)}`, {headers});
+        if (res.ok) {
+            const data = await res.json();
+            const entities = data.entities || [];
+            if (!state.docEntities) state.docEntities = {};
+            state.docEntities[docId] = entities;
+            const docRef = state.docs.find(d => (d.backendId || d.id) === docId);
+            if (docRef) docRef.entities = entities;
+        }
+    } catch (error) {
+        console.warn('Knowledge graph doc fetch failed', error);
+    } finally {
+        delete docEntityFetchLocks[docId];
+        renderDocEntities(doc);
+    }
+}
+
+async function fetchUserEntities(force = false) {
+    if (!state.user || state.user.isGuest) {
+        renderUserEntities();
+        return;
+    }
+    const now = Date.now();
+    if (!force && state.knowledgeGraph?.entities?.length && now - (state.knowledgeGraph.lastFetched || 0) < KG_CACHE_TTL) {
+        renderUserEntities();
+        return;
+    }
+    if (state.knowledgeGraph?.loading) return;
+
+    if (!state.knowledgeGraph) state.knowledgeGraph = {entities: [], lastFetched: 0, loading: false};
+    state.knowledgeGraph.loading = true;
+    renderUserEntities();
+    try {
+        const headers = {'Content-Type': 'application/json'};
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+        const res = await fetch(`${API}/dev/knowledge-graph/entities?user_id=${encodeURIComponent(state.user.sub)}`, {headers});
+        if (res.ok) {
+            const data = await res.json();
+            state.knowledgeGraph.entities = data.entities || [];
+            state.knowledgeGraph.lastFetched = Date.now();
+        }
+    } catch (error) {
+        console.warn('Knowledge graph list failed', error);
+    } finally {
+        state.knowledgeGraph.loading = false;
+        renderUserEntities();
+    }
+}
+
+function renderUserEntities() {
+    const panel = document.getElementById('knowledgeGraphSidebar');
+    const chipsEl = document.getElementById('userEntityChips');
+    const emptyEl = document.getElementById('knowledgeGraphEmpty');
+    const refreshBtn = document.getElementById('refreshKnowledgeGraphBtn');
+    const collapseBtn = document.getElementById('collapseKGBtn');
+    if (!panel || !chipsEl || !emptyEl) return;
+
+    const entities = state.knowledgeGraph?.entities || [];
+    const loading = !!state.knowledgeGraph?.loading;
+
+    if (refreshBtn) {
+        if (state.user && !state.user.isGuest) {
+            refreshBtn.style.display = 'inline-flex';
+        } else {
+            refreshBtn.style.display = 'none';
+        }
+    }
+
+    if (collapseBtn && state.ui?.knowledgeGraphCollapsed) {
+        setKnowledgeGraphCollapsed(true);
+    }
+
+    const shouldShow = (entities && entities.length > 0) || loading || (state.activeEntityId && state.entityDetailCache?.[state.activeEntityId]);
+    if (!shouldShow) {
+        panel.classList.add('hidden');
+        return;
+    }
+    panel.classList.remove('hidden');
+
+    if (loading) {
+        emptyEl.classList.remove('hidden');
+        emptyEl.textContent = 'Loading knowledge graph...';
+        chipsEl.innerHTML = '<div class="flex gap-2"><div class="h-6 w-16 rounded-full bg-emerald-100 animate-pulse"></div><div class="h-6 w-20 rounded-full bg-emerald-100 animate-pulse"></div></div>';
+        return;
+    }
+
+    if (!entities || entities.length === 0) {
+        chipsEl.innerHTML = '';
+        emptyEl.classList.remove('hidden');
+        emptyEl.textContent = state.user && !state.user.isGuest ? 'No entities yet. Keep writing or refresh.' : 'Sign in to build your knowledge graph across documents.';
+        return;
+    }
+
+    emptyEl.classList.add('hidden');
+    const topEntities = entities.slice(0, 18);
+    chipsEl.innerHTML = topEntities.map(entity => buildEntityChip(entity, 'global')).join('');
+}
+
+function renderEntityDetail(detail) {
+    const panel = document.getElementById('entityDetailPanel');
+    if (!panel) return;
+    if (!detail) {
+        panel.classList.add('hidden');
+        panel.querySelector?.('#entityDetailDocs')?.replaceChildren();
+        if (!state.activeEntityId) {
+            const kgPanel = document.getElementById('knowledgeGraphSidebar');
+            if (kgPanel && !(state.knowledgeGraph?.entities && state.knowledgeGraph.entities.length)) {
+                kgPanel.classList.add('hidden');
+            }
+        }
+        return;
+    }
+    document.getElementById('knowledgeGraphSidebar')?.classList.remove('hidden');
+    panel.classList.remove('hidden');
+    const nameEl = document.getElementById('entityDetailName');
+    const metaEl = document.getElementById('entityDetailMeta');
+    const mentionsEl = document.getElementById('entityDetailMentions');
+    const docsEl = document.getElementById('entityDetailDocs');
+    const entity = detail.entity || {};
+    if (nameEl) nameEl.textContent = entity.name || 'Entity';
+    if (metaEl) metaEl.textContent = `${entity.type || 'Unknown'} • ${entity.doc_count || detail.documents?.length || 0} doc(s)`;
+    if (mentionsEl) {
+        const mentions = entity.mentions || [];
+        if (mentions.length === 0) {
+            mentionsEl.textContent = 'No context snippets available.';
+        } else {
+            mentionsEl.innerHTML = mentions.map(m => `<div class="text-[11px] text-gray-600 leading-relaxed">“${escapeHtmlAttr(m)}”</div>`).join('');
+        }
+    }
+    if (docsEl) {
+        if (!detail.documents || detail.documents.length === 0) {
+            docsEl.innerHTML = '<div class="text-xs text-gray-500">Only appears in this document so far.</div>';
+        } else {
+            docsEl.innerHTML = detail.documents.map(doc => {
+                const localDoc = state.docs.find(d => (d.backendId || d.id) === doc.doc_id);
+                const label = escapeHtmlAttr(localDoc?.name || doc.title || doc.doc_id);
+                const timestamp = doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '';
+                const isActive = (localDoc && localDoc.id === state.activeId) || doc.doc_id === state.activeId;
+                const buttonLabel = isActive ? 'Current' : 'Open';
+                const buttonState = isActive ? 'disabled class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-400 bg-emerald-50"' : 'class="text-[11px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-600 hover:bg-emerald-50"';
+                return `<div class="entity-doc-link" data-doc-id="${escapeHtmlAttr(doc.doc_id)}">` +
+                    `<div class="flex-1"><div class="font-medium text-emerald-700">${label}</div>` +
+                    `<div class="text-[11px] text-gray-500">${timestamp}</div></div>` +
+                    `<button ${buttonState}>${buttonLabel}</button>` +
+                    `</div>`;
+            }).join('');
+        }
+    }
+}
+
+function clearEntityDetail() {
+    state.activeEntityId = null;
+    renderEntityDetail(null);
+}
+
+function buildGuestEntityDetail(entityId) {
+    const doc = state.docs.find(d => d.id === state.activeId);
+    if (!doc) return null;
+    const docId = doc.backendId || doc.id;
+    const docEntities = state.docEntities?.[docId] || doc.entities || [];
+    const entity = docEntities.find(e => e.entity_id === entityId);
+    if (!entity) return null;
+    return {
+        entity: {
+            entity_id: entity.entity_id,
+            name: entity.name,
+            type: entity.type,
+            doc_count: 1,
+            salience: entity.salience,
+            mentions: entity.mentions || []
+        },
+        documents: [{
+            doc_id: docId,
+            title: doc.name,
+            summary: doc.summary,
+            created_at: doc.updated_at || doc.created_at
+        }]
+    };
+}
+
+async function showEntityDetail(entityId, source = 'doc') {
+    if (!entityId) return;
+    const kgPanel = document.getElementById('knowledgeGraphSidebar');
+    kgPanel?.classList.remove('hidden');
+    const docsEl = document.getElementById('entityDetailDocs');
+    if (docsEl) {
+        docsEl.innerHTML = '<div class="text-xs text-gray-500">Loading...</div>';
+    }
+
+    if (!state.entityDetailCache) state.entityDetailCache = {};
+    const cached = state.entityDetailCache[entityId];
+    const now = Date.now();
+    if (cached && now - cached.cachedAt < KG_DETAIL_TTL) {
+        state.activeEntityId = entityId;
+        renderEntityDetail(cached.detail);
+        return;
+    }
+
+    if (!state.user || state.user.isGuest) {
+        const guestDetail = buildGuestEntityDetail(entityId);
+        state.activeEntityId = entityId;
+        if (guestDetail) {
+            state.entityDetailCache[entityId] = {detail: guestDetail, cachedAt: Date.now()};
+            renderEntityDetail(guestDetail);
+        } else {
+            renderEntityDetail(null);
+            toast('Entity details available after you sign in.', true);
+        }
+        return;
+    }
+
+    try {
+        const headers = {'Content-Type': 'application/json'};
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+        const res = await fetch(`${API}/dev/knowledge-graph/entities/${encodeURIComponent(entityId)}?user_id=${encodeURIComponent(state.user.sub)}`, {headers});
+        if (res.ok) {
+            const detail = await res.json();
+            state.entityDetailCache[entityId] = {detail, cachedAt: Date.now()};
+            state.activeEntityId = entityId;
+            renderEntityDetail(detail);
+            return;
+        }
+    } catch (error) {
+        console.warn('Entity detail fetch failed', error);
+    }
+    const fallback = buildGuestEntityDetail(entityId);
+    if (fallback) {
+        state.entityDetailCache[entityId] = {detail: fallback, cachedAt: Date.now()};
+        state.activeEntityId = entityId;
+        renderEntityDetail(fallback);
+    } else {
+        renderEntityDetail(null);
+        toast('Unable to load entity details right now.', true);
+    }
+}
+
+function showEntityHoverCard(target, text) {
+    const card = document.getElementById('entityHoverCard');
+    if (!card || !text) return;
+    card.textContent = text;
+    const rect = target.getBoundingClientRect();
+    card.style.left = `${rect.left + window.scrollX}px`;
+    card.style.top = `${rect.bottom + window.scrollY + 8}px`;
+    card.classList.add('visible');
+}
+
+function hideEntityHoverCard() {
+    const card = document.getElementById('entityHoverCard');
+    if (card) card.classList.remove('visible');
+}
+
+window.openDocFromEntity = (docId) => {
+    if (!docId) return;
+    const targetDoc = state.docs.find(d => (d.backendId || d.id) === docId);
+    if (!targetDoc) {
+        toast('Document not loaded in this workspace yet.', true);
+        return;
+    }
+    if (state.activeId !== targetDoc.id) {
+        setActive(targetDoc.id);
+        toast(`📄 Switched to ${targetDoc.name}`, true);
+    }
+};
+
 function attachAllEvents() {
     console.log('Attaching all event handlers...');
     
@@ -1691,6 +2279,17 @@ function attachAllEvents() {
     on('createFolderBtn', 'onclick', createFolder);
     on('settingsBtn', 'onclick', openSettings);
     on('docIQTips', 'onclick', showDocIQTips);
+    on('refreshDocEntitiesBtn', 'onclick', () => {
+        const doc = state.docs.find(d => d.id === state.activeId);
+        if (doc) ensureDocEntities(doc, true);
+    });
+    on('refreshKnowledgeGraphBtn', 'onclick', () => fetchUserEntities(true));
+    on('collapseKGBtn', 'onclick', () => {
+        const btn = document.getElementById('collapseKGBtn');
+        const collapsed = (btn?.dataset.state || 'open') === 'open';
+        setKnowledgeGraphCollapsed(collapsed);
+    });
+    on('closeEntityDetail', 'onclick', () => clearEntityDetail());
     
     // File upload
     on('fileInput', 'onchange', handleFileUpload);
@@ -1896,6 +2495,39 @@ function attachAllEvents() {
     console.log('All event handlers attached');
 }
 
+document.addEventListener('click', (event) => {
+    const chip = event.target.closest('[data-entity-id]');
+    if (chip) {
+        event.preventDefault();
+        showEntityDetail(chip.dataset.entityId, chip.dataset.entitySource || 'doc');
+        hideEntityHoverCard();
+        return;
+    }
+    const docLink = event.target.closest('.entity-doc-link');
+    if (docLink) {
+        const button = event.target.closest('button');
+        if (button && button.disabled) return;
+        const docId = docLink.dataset.docId;
+        if (docId) {
+            openDocFromEntity(docId);
+            hideEntityHoverCard();
+        }
+    }
+});
+
+document.addEventListener('mouseenter', (event) => {
+    const target = event.target.closest('[data-entity-id]');
+    if (!target) return;
+    const mention = target.dataset.entityMention;
+    if (mention) showEntityHoverCard(target, mention);
+}, true);
+
+document.addEventListener('mouseleave', (event) => {
+    if (event.target.closest('[data-entity-id]')) {
+        hideEntityHoverCard();
+    }
+}, true);
+
 function createNewDoc() {
     const isPremiumUser = state.user?.sub === 'f4486468-b0f1-70ed-c84c-385c4fecbc7c';
     if (!isPremiumUser && state.limits.documents !== -1 && state.docs.length >= state.limits.documents) {
@@ -2031,6 +2663,8 @@ async function handleFileUpload(e) {
         };
         state.docs.push(newDoc);
         state.activeId = newDoc.id;
+        state.docEntities[backendDocId] = result.entities || [];
+        if (newDoc.entities === undefined) newDoc.entities = result.entities || [];
         
         showProgress(100);
         loadingScreen.style.display = 'none';
@@ -2046,6 +2680,8 @@ async function handleFileUpload(e) {
         if (result.insights) showInsights(result.insights);
         
         await loadUsage();
+        ensureDocEntities(newDoc, true);
+        fetchUserEntities(true);
         // Don't call render() - it wipes the chat including summary/questions
         
         // Apply smart highlights after render
@@ -5234,5 +5870,6 @@ function restoreHighlights(){const highlights=state.userHighlights[state.activeI
 // Initialize
 updateActiveBlock();updateHorizon();updateStreak(0);trackWritingSession();
     </script>
+    <div id="entityHoverCard"></div>
 </body>
 </html>

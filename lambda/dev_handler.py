@@ -13,6 +13,7 @@ from typing import Optional
 import boto3
 
 import requests
+from boto3.dynamodb.conditions import Key
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.tools import Tool
@@ -20,7 +21,13 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from agents import DEFAULT_RESEARCH_SYSTEM_PROMPT, build_langgraph_agent, web_search
 from config import get_settings, make_cors_headers
-from knowledge_graph import entities_to_document_payload, run_entity_extraction
+from knowledge_graph import (
+    entities_to_document_payload,
+    format_document_entities,
+    format_entity_detail,
+    format_user_entities,
+    run_entity_extraction,
+)
 
 # Environment
 settings = get_settings()
@@ -248,6 +255,41 @@ def _upsert_knowledge_graph(table, user_id, doc_id, doc_entities):
             'updated_at': now_iso,
         })
 
+
+def _list_user_entities(table, user_id):
+    resp = table.query(
+        KeyConditionExpression=Key('pk').eq(f'USER#{user_id}') & Key('sk').begins_with('ENTITY#')
+    )
+    return format_user_entities(resp.get('Items', []))
+
+
+def _get_document_entities(table, doc_id):
+    resp = table.query(
+        KeyConditionExpression=Key('pk').eq(f'DOC#{doc_id}') & Key('sk').begins_with('ENTITY#')
+    )
+    return format_document_entities(resp.get('Items', []))
+
+
+def _fetch_document_metadata(table, user_id, doc_ids):
+    doc_items = []
+    for doc_id in doc_ids:
+        response = table.get_item(Key={'pk': f'USER#{user_id}', 'sk': f'DOC#{doc_id}'})
+        item = response.get('Item') if isinstance(response, dict) else None
+        if item:
+            doc_items.append(item)
+    return doc_items
+
+
+def _get_entity_detail_payload(table, user_id, entity_id):
+    response = table.get_item(Key={'pk': f'USER#{user_id}', 'sk': f'ENTITY#{entity_id}'})
+    entity_item = response.get('Item') if isinstance(response, dict) else None
+    if not entity_item:
+        return None
+
+    doc_ids = entity_item.get('doc_ids', []) or []
+    doc_items = _fetch_document_metadata(table, user_id, doc_ids)
+    return format_entity_detail(entity_item, doc_items)
+
 def lambda_handler(event, context):
     """Main Lambda handler"""
     request_headers = event.get('headers', {})
@@ -264,6 +306,8 @@ def lambda_handler(event, context):
         
         print(f"📍 {method} {path}")
         
+        query_params = event.get('queryStringParameters') or {}
+
         # OPTIONS
         if method == 'OPTIONS':
             return {'statusCode': 200, 'headers': headers, 'body': ''}
@@ -281,7 +325,94 @@ def lambda_handler(event, context):
                     'timestamp': datetime.now().isoformat()
                 })
             }
-        
+
+        if path == '/dev/knowledge-graph/entities' and method == 'GET':
+            user_id = query_params.get('user_id') or query_params.get('userId')
+            if not user_id:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Missing user_id'})
+                }
+
+            docs_table = dynamodb.Table(DOC_TABLE)
+            try:
+                entities = _list_user_entities(docs_table, user_id)
+            except Exception as graph_error:  # noqa: BLE001
+                print(f"⚠️ Knowledge graph list failed: {graph_error}")
+                return {
+                    'statusCode': 500,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Failed to load knowledge graph'})
+                }
+
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps({'user_id': user_id, 'entities': entities}, cls=DecimalEncoder)
+            }
+
+        if path.startswith('/dev/knowledge-graph/entities/') and method == 'GET':
+            user_id = query_params.get('user_id') or query_params.get('userId')
+            if not user_id:
+                return {
+                    'statusCode': 400,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Missing user_id'})
+                }
+
+            parts = path.rstrip('/').split('/')
+            if len(parts) < 5:
+                return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Entity not found'})}
+            entity_id = parts[4]
+
+            docs_table = dynamodb.Table(DOC_TABLE)
+            try:
+                detail = _get_entity_detail_payload(docs_table, user_id, entity_id)
+            except Exception as graph_error:  # noqa: BLE001
+                print(f"⚠️ Entity detail load failed: {graph_error}")
+                return {
+                    'statusCode': 500,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Failed to load entity detail'})
+                }
+
+            if not detail:
+                return {
+                    'statusCode': 404,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Entity not found'})
+                }
+
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps(detail, cls=DecimalEncoder)
+            }
+
+        if path.startswith('/dev/knowledge-graph/docs/') and method == 'GET':
+            parts = path.rstrip('/').split('/')
+            if len(parts) < 5:
+                return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Document not found'})}
+            doc_id = parts[4]
+
+            docs_table = dynamodb.Table(DOC_TABLE)
+            try:
+                entities = _get_document_entities(docs_table, doc_id)
+            except Exception as graph_error:  # noqa: BLE001
+                print(f"⚠️ Document entity load failed: {graph_error}")
+                return {
+                    'statusCode': 500,
+                    'headers': headers,
+                    'body': json.dumps({'error': 'Failed to load document entities'})
+                }
+
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps({'doc_id': doc_id, 'entities': entities}, cls=DecimalEncoder)
+            }
+
         # Upload endpoint
         if path in ('/dev/upload', '/upload') and method == 'POST':
             body = json.loads(event['body'])
@@ -606,12 +737,11 @@ def lambda_handler(event, context):
 
         # Documents endpoint
         if path == '/documents' and method == 'GET':
-            user_id = event.get('queryStringParameters', {}).get('user_id')
+            user_id = query_params.get('user_id')
             if not user_id:
                 return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Missing user_id'})}
-            
+
             docs_table = dynamodb.Table(DOC_TABLE)
-            from boto3.dynamodb.conditions import Key
             resp = docs_table.query(
                 KeyConditionExpression=Key('pk').eq(f'USER#{user_id}') & Key('sk').begins_with('DOC#')
             )

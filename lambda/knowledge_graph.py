@@ -11,7 +11,8 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence
+from decimal import Decimal
+from typing import Dict, Iterable, List, Sequence
 
 ALLOWED_ENTITY_TYPES = {
     "PERSON",
@@ -255,3 +256,92 @@ def entities_to_document_payload(entities: Iterable[Entity]) -> List[dict]:
             }
         )
     return payload
+
+
+def _coerce_decimal(value):
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
+    return value
+
+
+def format_user_entities(items: Sequence[Dict]) -> List[Dict]:
+    """
+    Produce a user-facing entity list from DynamoDB rows.
+    """
+
+    formatted: List[Dict] = []
+    for item in items:
+        entity_id = item.get("entity_id") or item.get("sk", "").replace("ENTITY#", "")
+        if not entity_id:
+            continue
+
+        formatted.append(
+            {
+                "entity_id": entity_id,
+                "name": item.get("entity_name", item.get("name")),
+                "type": item.get("entity_type"),
+                "doc_count": int(_coerce_decimal(item.get("doc_count", 0))),
+                "doc_ids": item.get("doc_ids", []),
+                "salience": float(_coerce_decimal(item.get("salience", 0.0))),
+                "mentions": item.get("mentions", []),
+                "updated_at": item.get("updated_at"),
+            }
+        )
+
+    return sorted(formatted, key=lambda entry: (-entry["doc_count"], entry["name"] or ""))  # type: ignore[arg-type]
+
+
+def format_document_entities(items: Sequence[Dict]) -> List[Dict]:
+    """
+    Prepare doc ↔ entity edge list from DynamoDB rows on the DOC# partition.
+    """
+
+    formatted: List[Dict] = []
+    for item in items:
+        entity_id = item.get("entity_id") or item.get("sk", "").replace("ENTITY#", "")
+        if not entity_id:
+            continue
+
+        formatted.append(
+            {
+                "entity_id": entity_id,
+                "name": item.get("entity_name"),
+                "type": item.get("entity_type"),
+                "salience": float(_coerce_decimal(item.get("salience", 0.0))),
+                "mentions": item.get("mentions", []),
+                "updated_at": item.get("updated_at"),
+            }
+        )
+    return sorted(formatted, key=lambda entry: (-entry["salience"], entry["name"] or ""))  # type: ignore[arg-type]
+
+
+def format_entity_detail(entity_item: Dict, document_items: Sequence[Dict]) -> Dict:
+    """
+    Build a composite entity detail payload with related documents.
+    """
+
+    documents: List[Dict] = []
+    for doc in document_items:
+        documents.append(
+            {
+                "doc_id": doc.get("doc_id"),
+                "title": doc.get("filename"),
+                "summary": doc.get("summary"),
+                "created_at": doc.get("created_at"),
+            }
+        )
+
+    return {
+        "entity": {
+            "entity_id": entity_item.get("entity_id"),
+            "name": entity_item.get("entity_name"),
+            "type": entity_item.get("entity_type"),
+            "doc_count": int(_coerce_decimal(entity_item.get("doc_count", len(documents)))),
+            "salience": float(_coerce_decimal(entity_item.get("salience", 0.0))),
+            "mentions": entity_item.get("mentions", []),
+            "updated_at": entity_item.get("updated_at"),
+        },
+        "documents": documents,
+    }

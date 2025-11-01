@@ -1,4 +1,5 @@
 import math
+from decimal import Decimal
 import sys
 from pathlib import Path
 
@@ -10,6 +11,9 @@ from knowledge_graph import (  # noqa: E402
     Entity,
     consolidate_entities,
     entities_to_document_payload,
+    format_document_entities,
+    format_entity_detail,
+    format_user_entities,
     parse_entity_payload,
     run_entity_extraction,
 )
@@ -89,3 +93,47 @@ def test_entities_to_document_payload_structure(entities):
         assert set(entry.keys()) == {"entity_id", "name", "type", "salience", "mentions"}
         assert isinstance(entry["entity_id"], str)
         assert isinstance(entry["salience"], float)
+
+
+def test_format_user_entities_sorts_and_coerces_decimal():
+    items = [
+        {"entity_id": "person-jane", "entity_name": "Jane", "entity_type": "PERSON", "doc_count": Decimal("2"), "salience": Decimal("0.3")},
+        {"entity_id": "project-x", "entity_name": "Project X", "entity_type": "PROJECT", "doc_count": Decimal("3.0"), "salience": Decimal("0.4")},
+    ]
+
+    formatted = format_user_entities(items)
+    assert [entry["entity_id"] for entry in formatted] == ["project-x", "person-jane"]
+    assert formatted[0]["doc_count"] == 3
+    assert formatted[0]["salience"] == pytest.approx(0.4)
+
+
+def test_format_document_entities_orders_by_salience():
+    items = [
+        {"entity_id": "alpha", "entity_name": "Alpha", "entity_type": "PERSON", "salience": Decimal("0.2")},
+        {"entity_id": "beta", "entity_name": "Beta", "entity_type": "PROJECT", "salience": Decimal("0.8")},
+    ]
+
+    formatted = format_document_entities(items)
+    assert [entry["entity_id"] for entry in formatted] == ["beta", "alpha"]
+    assert formatted[0]["salience"] == pytest.approx(0.8)
+
+
+def test_format_entity_detail_combines_documents():
+    entity = {
+        "entity_id": "project-x",
+        "entity_name": "Project X",
+        "entity_type": "PROJECT",
+        "doc_count": Decimal("2"),
+        "mentions": ["Kickoff"],
+        "salience": Decimal("0.9"),
+        "updated_at": "2025-11-01T00:00:00Z",
+    }
+    documents = [
+        {"doc_id": "doc_alpha", "filename": "Alpha Doc", "summary": "Summary A", "created_at": "2025-10-10T00:00:00Z"},
+        {"doc_id": "doc_beta", "filename": "Beta Doc", "summary": "Summary B", "created_at": "2025-10-11T00:00:00Z"},
+    ]
+
+    detail = format_entity_detail(entity, documents)
+    assert detail["entity"]["name"] == "Project X"
+    assert detail["entity"]["doc_count"] == 2
+    assert len(detail["documents"]) == 2

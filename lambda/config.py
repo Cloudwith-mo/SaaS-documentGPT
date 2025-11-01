@@ -88,7 +88,7 @@ def make_cors_headers(
     request_headers: Mapping[str, str] | None = None,
     *,
     content_type: str = "application/json",
-    allow_headers: str = "Content-Type,Authorization",
+    allow_headers: str = "Content-Type,Authorization,x-api-key,x-user-id,x-docgpt-state",
     allow_methods: str = "GET,POST,OPTIONS",
     add_origin_header: bool | None = None,
     include_credentials: bool | None = None,

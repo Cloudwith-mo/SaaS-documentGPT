@@ -65,15 +65,8 @@ jobs:
           COGNITO_PASSWORD: ${{ secrets.COGNITO_PASSWORD }}
           COGNITO_REGION: ${{ secrets.COGNITO_REGION }}
         run: |
-          SECRET_HASH=$(python3 - <<'PY'
-import base64, hmac, hashlib, os
-username = os.environ["COGNITO_USERNAME"]
-client_id = os.environ["COGNITO_CLIENT_ID"]
-client_secret = os.environ["COGNITO_CLIENT_SECRET"]
-digest = hmac.new(client_secret.encode(), (username + client_id).encode(), hashlib.sha256).digest()
-print(base64.b64encode(digest).decode())
-PY
-          )
+          SECRET_HASH=$(python3 -c "import base64, hmac, hashlib, os; username=os.environ['COGNITO_USERNAME']; client_id=os.environ['COGNITO_CLIENT_ID']; client_secret=os.environ['COGNITO_CLIENT_SECRET']; digest=hmac.new(client_secret.encode(), (username + client_id).encode(), hashlib.sha256).digest(); print(base64.b64encode(digest).decode())")
+
           ID_TOKEN=$(aws cognito-idp initiate-auth \
             --auth-flow USER_PASSWORD_AUTH \
             --client-id "$COGNITO_CLIENT_ID" \
@@ -81,6 +74,7 @@ PY
             --region "$COGNITO_REGION" \
             --query 'AuthenticationResult.IdToken' \
             --output text)
+
           echo "token=$ID_TOKEN" >> "$GITHUB_OUTPUT"
 
       - name: Run k6 smoke test

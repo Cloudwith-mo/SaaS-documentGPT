@@ -140,6 +140,7 @@ Legend: ☐ todo · ☐⚙ in progress · ☑ done
 - Co-writer regression + live curl tests
 - Weekly digest/dashboard pytest coverage
 - Known benign warnings: PyPDF2 deprecation (scheduled for dependency sweep in Phase 3).
+- Manual API sanity: `curl -fsSL -H "Authorization: Bearer $BEARER" -H "X-DocGPT-State: $(printf '{"'"'"docs"'"'":0,"'"'"tags"'"'":0}' | base64)" "https://9voqzgx3ch.execute-api.us-east-1.amazonaws.com/prod/dev/system-health?userId=$TEST_USER"`
 
 ---
 
